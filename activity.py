@@ -84,6 +84,14 @@ from faceselect import FaceSelector
 
 import speech
 
+# Import GGUF model inference class
+# Putting this into a try-except block to handle the case where llama-cpp-python is not installed
+try:
+    from GenAI import load_gguf_model
+    USING_BRAIN = False
+except ImportError:
+    USING_BRAIN = True
+
 SERVICE = 'org.sugarlabs.Speak'
 IFACE = SERVICE
 PATH = '/org/sugarlabs/Speak'
@@ -285,6 +293,14 @@ class SpeakActivity(activity.Activity):
             icon_name='voice')
         self._voice_button.connect('clicked', self._configure_cb)
         toolbox.toolbar.insert(self._voice_button, -1)
+
+        # Add Kokoro button
+        self._kokoro_button = ToolbarButton(
+            page=self._make_kokoro_bar(),
+            label=_('Kokoro'),
+            icon_name='module-language')  # TODO: currently re-using an old icon, need to change this.
+        self._kokoro_button.connect('clicked', self._configure_cb)
+        toolbox.toolbar.insert(self._kokoro_button, -1)
 
         self._face_button = ToolbarButton(
             page=self._make_face_bar(),
@@ -747,6 +763,159 @@ class SpeakActivity(activity.Activity):
         facebar.show_all()
         return facebar
 
+    def _make_kokoro_bar(self):
+        kokoro_bar = Gtk.Toolbar()
+        self._kokoro_voice_evboxes = {}
+        self._kokoro_voice_box = Gtk.VBox()
+
+        # Add heading for DEFAULT VOICES
+        default_heading = Gtk.Label()
+        default_heading.set_markup('<b>DEFAULT VOICES</b>')
+        default_heading.set_justify(Gtk.Justification.CENTER)
+        default_heading.set_alignment(0.5, 0)
+        self._kokoro_voice_box.pack_start(default_heading, False, False, style.DEFAULT_PADDING)
+        default_heading.show()
+
+        # Arrange default voices in 3 columns
+        default_voices = speech.get_speech().get_default_kokoro_voices()
+        current_voice = speech.get_speech().current_kokoro_voice
+        default_vboxes = [Gtk.VBox(), Gtk.VBox(), Gtk.VBox()]
+        count = len(default_voices)
+        for i, voice_name in enumerate(default_voices):
+            label = Gtk.Label()
+            label.set_use_markup(True)
+            label.set_justify(Gtk.Justification.LEFT)
+            label.set_markup('<span size="large">%s</span>' % voice_name)
+            alignment = Gtk.Alignment.new(0, 0, 0, 0)
+            alignment.add(label)
+            label.show()
+            evbox = Gtk.EventBox()
+            self._kokoro_voice_evboxes[voice_name] = evbox
+            evbox.connect('button-press-event', self._kokoro_voice_changed_event_cb, voice_name)
+            if voice_name == current_voice:
+                evbox.modify_bg(0, style.COLOR_BUTTON_GREY.get_gdk_color())
+            evbox.add(alignment)
+            alignment.show()
+            if i < count // 3:
+                default_vboxes[0].pack_start(evbox, True, True, 0)
+            elif i < 2 * count // 3:
+                default_vboxes[1].pack_start(evbox, True, True, 0)
+            else:
+                default_vboxes[2].pack_start(evbox, True, True, 0)
+            evbox.show()
+        default_hbox = Gtk.HBox()
+        default_hbox.pack_start(default_vboxes[0], True, True, style.DEFAULT_PADDING)
+        default_hbox.pack_start(default_vboxes[1], True, True, style.DEFAULT_PADDING)
+        default_hbox.pack_start(default_vboxes[2], True, True, style.DEFAULT_PADDING)
+        self._kokoro_voice_box.pack_start(default_hbox, False, False, style.DEFAULT_PADDING)
+        default_hbox.show_all()
+
+        # Add heading for Add-on Voices
+        addon_heading = Gtk.Label()
+        addon_heading.set_markup('<b>ADD-ON VOICES</b>')
+        addon_heading.set_justify(Gtk.Justification.CENTER)
+        addon_heading.set_alignment(0.5, 0)
+        self._kokoro_voice_box.pack_start(addon_heading, False, False, style.DEFAULT_PADDING)
+        addon_heading.show()
+
+        # Arrange add-on voices in 3 columns
+        addon_voices = speech.get_speech().get_addon_kokoro_voices()
+        addon_vboxes = [Gtk.VBox(), Gtk.VBox(), Gtk.VBox()]
+        count = len(addon_voices)
+        for i, voice_name in enumerate(addon_voices):
+            label = Gtk.Label()
+            label.set_use_markup(True)
+            label.set_justify(Gtk.Justification.LEFT)
+            label.set_markup('<span size="large">%s</span>' % voice_name)
+            alignment = Gtk.Alignment.new(0, 0, 0, 0)
+            alignment.add(label)
+            label.show()
+            evbox = Gtk.EventBox()
+            self._kokoro_voice_evboxes[voice_name] = evbox
+            evbox.connect('button-press-event', self._kokoro_voice_changed_event_cb, voice_name)
+            if voice_name == current_voice:
+                evbox.modify_bg(0, style.COLOR_BUTTON_GREY.get_gdk_color())
+            evbox.add(alignment)
+            alignment.show()
+            if i < count // 3:
+                addon_vboxes[0].pack_start(evbox, True, True, 0)
+            elif i < 2 * count // 3:
+                addon_vboxes[1].pack_start(evbox, True, True, 0)
+            else:
+                addon_vboxes[2].pack_start(evbox, True, True, 0)
+            evbox.show()
+        addon_hbox = Gtk.HBox()
+        addon_hbox.pack_start(addon_vboxes[0], True, True, style.DEFAULT_PADDING)
+        addon_hbox.pack_start(addon_vboxes[1], True, True, style.DEFAULT_PADDING)
+        addon_hbox.pack_start(addon_vboxes[2], True, True, style.DEFAULT_PADDING)
+        self._kokoro_voice_box.pack_start(addon_hbox, False, False, style.DEFAULT_PADDING)
+        addon_hbox.show_all()
+
+        kokoro_palette_button = ToolButton('module-language')
+        kokoro_palette_button.set_tooltip(_('Choose Kokoro voice:'))
+        self._kokoro_palette = kokoro_palette_button.get_palette()
+        self._kokoro_palette.set_content(self._kokoro_voice_box)
+        self._kokoro_voice_box.show_all()
+        kokoro_palette_button.connect('clicked', self._face_palette_cb)
+        kokoro_bar.insert(kokoro_palette_button, -1)
+        kokoro_palette_button.show()
+        kokoro_bar.show_all()
+        return kokoro_bar
+
+    def _kokoro_voice_changed_event_cb(self, widget, event, voice_name):
+        # Show info label(Indication of voice changing) upon click
+        info_label = Gtk.Label()
+        info_label.set_markup('<span foreground="blue" size="large">%s</span>' % _('Please wait...'))
+        self._kokoro_voice_box.pack_start(info_label, False, False, style.DEFAULT_PADDING)
+        info_label.show()
+        while Gtk.events_pending():
+            Gtk.main_iteration()
+
+        def async_check_and_update():
+            kokoro_pipeline = speech.get_speech().kokoro_pipeline
+            is_local = False
+            if kokoro_pipeline:
+                is_local = voice_name in kokoro_pipeline.voices
+                if not is_local:
+                    try:
+                        from huggingface_hub import hf_hub_download
+                    except ImportError:
+                        logging.error("Hugging Face Hub was not installed, or could not be imported. Aborting")
+                        info_label.set_markup('<span foreground="red" size="large">%s</span>' % _('Hugging Face Hub is not installed.'))
+                        return False
+                    
+                    repo_id = kokoro_pipeline.repo_id
+                    voice_path = hf_hub_download(repo_id=repo_id, filename=f'voices/{voice_name}.pt', cache_dir=None, force_download=False, resume_download=False)
+                    is_local = os.path.exists(voice_path)
+            else:
+                is_local = True
+            # Always speak notification before changing voice
+            
+            if not is_local:
+                info_label.set_markup('<span foreground="blue" size="large">%s</span>' % _('This voice is being downloaded, please wait'))
+            else:
+                info_label.set_markup('<span foreground="green" size="large">%s</span>' % _('Changing voice, please wait'))
+            while Gtk.events_pending():
+                Gtk.main_iteration()
+            def remove_info_label():
+                self._kokoro_voice_box.remove(info_label)
+                return False
+            GLib.timeout_add(3000, remove_info_label)
+
+            # Now update UI for voice selection
+            for old_name, evbox in self._kokoro_voice_evboxes.items():
+                if old_name == speech.get_speech().current_kokoro_voice:
+                    evbox.modify_bg(0, style.COLOR_BLACK.get_gdk_color())
+            self._kokoro_voice_evboxes[voice_name].modify_bg(0, style.COLOR_BUTTON_GREY.get_gdk_color())
+            
+            # Actually set the voice (may trigger download)
+            #TODO: Better indication before downloading voices / ask for confirmation before downloading.
+            speech.get_speech().set_kokoro_voice(voice_name)
+            self.face.say_notification(_('Kokoro voice changed'))
+            return False
+
+        GLib.idle_add(async_check_and_update)
+
     def _photo_face_cb(self, widget):
         chooser = ObjectChooser(parent=self,
                                 what_filter=mime.GENERIC_TYPE_IMAGE)
@@ -959,13 +1128,27 @@ class SpeakActivity(activity.Activity):
 
     def _speak_the_text(self, entry, text):
         self._remove_idle()
-
         if text:
             self.face.look_ahead()
-
-            # speak the text
+            # Use GGUF model for bot mode
             if self._mode == MODE_BOT:
-                self.face.say(brain.respond(text))
+                if not USING_BRAIN:
+                    #This means llama-cpp-python is imported, try running the model
+                    try:
+                        model_path = "./GenAI/LlaMA-135-Claude-RUN2-q4.gguf"
+                        model = load_gguf_model(model_path) 
+                        model.set_generation_mode(3)
+
+                        response = model.ask_question(text)
+                        self.face.say(response)
+                    except Exception as e:
+                        logging.error(f"Error using GGUF model: {e}")
+                        #Use brain fallback
+                        self.face.say(brain.respond(text))
+                else:
+                    #Now try fallback to old chatbot
+                    #TODO: We could remove this fallback in the future
+                    self.face.say(brain.respond(text))
             else:
                 self.face.say(text)
 
@@ -1048,41 +1231,42 @@ class SpeakActivity(activity.Activity):
 
         self._voice_palette.set_content(self._brain_box)
 
-        new_voice = None
-        for name in list(brain.BOTS.keys()):
-            if self._current_voice[0].short_name == name:
-                new_voice == self._current_voice[0]
-                break
-        if new_voice is None:
-            new_voice = brain.get_default_voice()
-            if new_voice.friendlyname in self._current_voice[0].friendlyname:
-                logging.debug('skipping sorry message for %s %s' %
-                              (new_voice.friendlyname,
-                               self._current_voice[0].friendlyname))
-                sorry = None
+        if USING_BRAIN:
+            new_voice = None
+            for name in list(brain.BOTS.keys()):
+                if self._current_voice[0].short_name == name:
+                    new_voice == self._current_voice[0]
+                    break
+            if new_voice is None:
+                new_voice = brain.get_default_voice()
+                if new_voice.friendlyname in self._current_voice[0].friendlyname:
+                    logging.debug('skipping sorry message for %s %s' %
+                                (new_voice.friendlyname,
+                                self._current_voice[0].friendlyname))
+                    sorry = None
+                else:
+                    sorry = _("Sorry, I can't speak %(old_voice)s, "
+                            "let's talk %(new_voice)s instead.") % {
+                                'old_voice': self._current_voice[0].friendlyname,
+                                'new_voice': new_voice.friendlyname}
             else:
-                sorry = _("Sorry, I can't speak %(old_voice)s, "
-                          "let's talk %(new_voice)s instead.") % {
-                              'old_voice': self._current_voice[0].friendlyname,
-                              'new_voice': new_voice.friendlyname}
-        else:
-            new_voice = new_voice[0]
-            sorry = None
+                new_voice = new_voice[0]
+                sorry = None
 
-        self._set_voice(new_voice)
+            self._set_voice(new_voice)
 
-        evboxes = self._brain_evboxes
-        for old_voice in list(evboxes.keys()):
-            evboxes[old_voice][0].modify_bg(
-                0, style.COLOR_BLACK.get_gdk_color())
+            evboxes = self._brain_evboxes
+            for old_voice in list(evboxes.keys()):
+                evboxes[old_voice][0].modify_bg(
+                    0, style.COLOR_BLACK.get_gdk_color())
 
-        if new_voice.short_name in evboxes:
-            evboxes[new_voice.short_name][0].modify_bg(
-                0, style.COLOR_BUTTON_GREY.get_gdk_color())
+            if new_voice.short_name in evboxes:
+                evboxes[new_voice.short_name][0].modify_bg(
+                    0, style.COLOR_BUTTON_GREY.get_gdk_color())
 
-        if not brain.load(self, new_voice, sorry):
-            if sorry:
-                self.face.say_notification(sorry)
+            if not brain.load(self, new_voice, sorry):
+                if sorry:
+                    self.face.say_notification(sorry)
 
     def __toggled_mode_chat_cb(self, button):
         if not button.props.active:
