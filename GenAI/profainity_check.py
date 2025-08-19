@@ -29,3 +29,14 @@ def bad_word_list() -> list:
     decoded_list = [base64.b64decode(line.strip()).decode('utf-8') for line in a]
 
     return decoded_list
+
+def is_profane(text: str) -> bool:
+        """
+        Check if the given string contains any profanity from the blacklist (whole word match only).
+        """
+        words = [w.strip(".,!?;:()[]{}\"'").lower() for w in text.split()]
+        blacklist = set(word.lower() for word in bad_word_list())
+        for w in words:
+            if w in blacklist:
+                return False
+        return True
