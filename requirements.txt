@@ -5,3 +5,4 @@ spacy
 numpy
 torch
 transformers
+requests
