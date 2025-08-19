@@ -28,6 +28,7 @@ import dbus
 import subprocess
 import json
 import random
+import threading
 from gettext import gettext as _
 from dbus import PROPERTIES_IFACE
 
@@ -91,6 +92,9 @@ try:
     USING_BRAIN = False
 except ImportError:
     USING_BRAIN = True
+
+from LLM import is_connected, ask_llm_prompted
+from GenAI import is_profane
 
 SERVICE = 'org.sugarlabs.Speak'
 IFACE = SERVICE
@@ -1126,30 +1130,106 @@ class SpeakActivity(activity.Activity):
         text = self._entry.props.text
         self._speak_the_text(self._entry, text)
 
+    def _try_llm_response(self, text):
+        """Try to get response from LLM. Returns response string or None if failed."""
+
+        if not is_profane(text): #if input text is profane don't even try to get response, intercept
+            return "Hmm, that word isn't very friendly. Talking with kind words makes chatting more fun! Can you try again with a friendly word?"
+        
+        try:
+            llm_response = ask_llm_prompted(question = text)
+
+            if llm_response == None:
+                logging.error("LLM returned None response")
+                return None
+
+            if not is_profane(llm_response):
+                llm_response = "Sorry, I was not able to generate this response."
+
+            return llm_response
+        
+        except Exception as e:
+            logging.error(f"Error in LLM: {e}")
+            return None
+
+    def _try_slm_response(self, text):
+        """Try to get response from SLM. Returns response string or None if failed."""
+
+        if not is_profane(text): #if input text is profane don't even try to get response, intercept
+            return "Hmm, that word isn't very friendly. Talking with kind words makes chatting more fun! Can you try again with a friendly word?"
+
+        try:
+            model_path = "./GenAI/LlaMA-135-Claude-RUN2-q4.gguf"
+            model = load_gguf_model(model_path)
+            model.set_generation_mode(3)
+
+            model_output = model.ask_question(text)
+            if not is_profane(model_output):
+                model_output = "Sorry, I was not able to generate this response."
+            return model_output
+        
+        except Exception as e:
+            logging.error(f"Error using SLM model: {e}")
+            return None
+
     def _speak_the_text(self, entry, text):
         self._remove_idle()
         if text:
             self.face.look_ahead()
-            # Use GGUF model for bot mode
-            if self._mode == MODE_BOT:
-                if not USING_BRAIN:
-                    #This means llama-cpp-python is imported, try running the model
-                    try:
-                        model_path = "./GenAI/LlaMA-135-Claude-RUN2-q4.gguf"
-                        model = load_gguf_model(model_path) 
-                        model.set_generation_mode(3)
 
-                        response = model.ask_question(text)
+            if self._mode == MODE_BOT: # Chatbot mode
+
+                # ORDER OF PRIORITY:
+                # 1. LLM (if internet is available)
+                # 2. SLM (if LLM fails or no internet)
+                # 3. Brain (if both LLM and SLM fail)
+
+                if not USING_BRAIN: #SpeakAI compatibility code
+                    # Try LLM first
+                    # But check if connected to internet first,
+                    # otherwise go to SLM fallback
+                    if is_connected():
+                        self.face.say("Thinking...")
+                        
+                        def fetch_and_speak_response():
+                            response = self._try_llm_response(text)
+                            
+                            if not response:
+                                response = self._try_slm_response(text)
+                            
+                            if not response:
+                                response = brain.respond(text)
+
+                            def safe_face_say():
+                                self.face.say(response)
+                                return False
+                            GLib.idle_add(safe_face_say)
+                        
+                        # Start the thread
+                        # Threading here to stop blocking the UI. The response from SugarAI service takes a while, so it's better this way
+                        llm_thread = threading.Thread(target=fetch_and_speak_response)
+                        llm_thread.daemon = True
+                        llm_thread.start()
+                    else:
+                        # No internet, try SLM -> Brain
+                        response = self._try_slm_response(text)
+                        if not response:
+                            response = brain.respond(text)
                         self.face.say(response)
-                    except Exception as e:
-                        logging.error(f"Error using GGUF model: {e}")
-                        #Use brain fallback
-                        self.face.say(brain.respond(text))
                 else:
-                    #Now try fallback to old chatbot
-                    #TODO: We could remove this fallback in the future
-                    self.face.say(brain.respond(text))
+                    # Use traditional brain chatbot
+                    brain_response = brain.respond(text)
+
+                    if not is_profane(text): #Text (input) is not profane, contains a bad word
+                        brain_response = "Hmm, that word isn't very friendly. Talking with kind words makes chatting more fun! Can you try again with a friendly word?"
+
+                    if not is_profane(brain_response): #Brain response is not profane
+                        brain_response = "Sorry, I was not able to generate this response."
+
+                    self.face.say(brain_response)
             else:
+                if not is_profane(text): #Text (input) is not profane, contains a bad word
+                    text = "Hmm, that word isn't very friendly. Talking with kind words makes chatting more fun! Can you try again with a friendly word?"
                 self.face.say(text)
 
         if text and not self._tablet_mode:
