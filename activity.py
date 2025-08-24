@@ -93,7 +93,7 @@ try:
 except ImportError:
     USING_BRAIN = True
 
-from LLM import is_connected, ask_llm_prompted
+from LLM import is_connected, ask_llm_prompted, DEFAULT_PROMPT
 from GenAI import is_profane
 
 SERVICE = 'org.sugarlabs.Speak'
@@ -198,6 +198,33 @@ class SpeakActivity(activity.Activity):
         self._current_voice = None
         self._face_type = FACE_CARTOON
 
+        # Load personas from `personas.json`
+        self._personas = {}
+        self._current_persona = None
+        try:
+            with open('personas.json', 'r') as f:
+                self._personas = json.load(f)
+            # Set default persona to Jane
+            self._current_persona = 'Jane'
+        except FileNotFoundError:
+            logger.warning("personas.json not found, using default persona")
+            # Fallback default persona, in case personas.json is missing
+            self._personas = {
+                'Jane': {
+                    'voice': 'af_bella',
+                    'prompt': (
+                        "You are a friendly teacher named Jane who is 28 years old. "
+                        "You teach 10 year old children. Always give helpful, "
+                        "educational responses in simple words that children can "
+                        "understand. Keep your answers between 20-40 words. "
+                        "Be encouraging and enthusiastic but never use emojis(ever). "
+                        "If you notice spelling mistakes, gently correct them. "
+                        "Stay focused on the topic and give relevant answers."
+                    )
+                }
+            }
+            self._current_persona = 'Jane'
+
         # make an audio device for playing back and rendering audio
         self.connect('notify::active', self._active_cb)
         self._cfg = {}
@@ -298,6 +325,14 @@ class SpeakActivity(activity.Activity):
         self._voice_button.connect('clicked', self._configure_cb)
         toolbox.toolbar.insert(self._voice_button, -1)
 
+        # Add Persona button
+        self._persona_button = ToolbarButton(
+            page=self._make_persona_bar(),
+            label=_('Persona'),
+            icon_name='Personas_Icon')
+        self._persona_button.connect('clicked', self._configure_cb)
+        toolbox.toolbar.insert(self._persona_button, -1)
+
         # Add Kokoro button
         self._kokoro_button = ToolbarButton(
             page=self._make_kokoro_bar(),
@@ -354,6 +389,8 @@ class SpeakActivity(activity.Activity):
             return True
         if self._voice_button.is_expanded():
             return True
+        if self._persona_button.is_expanded():
+            return True
         if self._face_button.is_expanded():
             return True
         return False
@@ -376,6 +413,10 @@ class SpeakActivity(activity.Activity):
             # self.voices.connect('changed', self.__changed_voices_cb)
             self.pitchadj.connect('value_changed', self._pitch_adjusted_cb)
             self.rateadj.connect('value_changed', self._rate_adjusted_cb)
+            
+            # Set initial persona voice
+            self._set_persona_voice()
+            
         if self._active_number_of_eyes is None:
             self._number_of_eyes_changed_event_cb(None, None, 'two', True)
         if self._active_eyes is None:
@@ -458,6 +499,17 @@ class SpeakActivity(activity.Activity):
             for i in self._cfg['history']:
                 self._entrycombo.append_text(i)
 
+        # Load persona if saved
+        if 'persona' in self._cfg and self._cfg['persona'] in self._personas:
+            self._current_persona = self._cfg['persona']
+            # Update persona visual selection
+            for persona_name in list(self._persona_evboxes.keys()):
+                self._persona_evboxes[persona_name].modify_bg(
+                    0, style.COLOR_BLACK.get_gdk_color())
+            if self._current_persona in self._persona_evboxes:
+                self._persona_evboxes[self._current_persona].modify_bg(
+                    0, style.COLOR_BUTTON_GREY.get_gdk_color())
+
         self._new_instance()
 
     def write_file(self, file_path):
@@ -471,7 +523,8 @@ class SpeakActivity(activity.Activity):
         cfg = {'status': self.face.status.serialize(),
                'face_type': self._face_type,
                'text': self._entry.props.text,
-               'history': history, }
+               'history': history,
+               'persona': self._current_persona, }
         open(file_path, 'w').write(json.dumps(cfg))
 
     def _look_at_cursor(self, entry, *ignored):
@@ -802,7 +855,7 @@ class SpeakActivity(activity.Activity):
             alignment.show()
             if i < count // 3:
                 default_vboxes[0].pack_start(evbox, True, True, 0)
-            elif i < 2 * count // 3:
+            elif i < count // 3 * 2:
                 default_vboxes[1].pack_start(evbox, True, True, 0)
             else:
                 default_vboxes[2].pack_start(evbox, True, True, 0)
@@ -843,7 +896,7 @@ class SpeakActivity(activity.Activity):
             alignment.show()
             if i < count // 3:
                 addon_vboxes[0].pack_start(evbox, True, True, 0)
-            elif i < 2 * count // 3:
+            elif i < count // 3 * 2:
                 addon_vboxes[1].pack_start(evbox, True, True, 0)
             else:
                 addon_vboxes[2].pack_start(evbox, True, True, 0)
@@ -865,6 +918,78 @@ class SpeakActivity(activity.Activity):
         kokoro_palette_button.show()
         kokoro_bar.show_all()
         return kokoro_bar
+
+    def _make_persona_bar(self):
+        persona_bar = Gtk.Toolbar()
+        
+        self._persona_evboxes = {}
+        self._persona_box = Gtk.VBox()
+        
+        # Heading
+        persona_heading = Gtk.Label()
+        persona_heading.set_markup('<b>PERSONAS</b>')
+        persona_heading.set_justify(Gtk.Justification.CENTER)
+        persona_heading.set_alignment(0.5, 0)
+        self._persona_box.pack_start(persona_heading, False, False, style.DEFAULT_PADDING)
+        persona_heading.show()
+
+        # Arrange in columns
+        persona_names = list(self._personas.keys())
+        persona_vboxes = [Gtk.VBox(), Gtk.VBox(), Gtk.VBox()]
+        count = len(persona_names)
+        
+        for i, persona_name in enumerate(persona_names):
+            label = Gtk.Label()
+            label.set_use_markup(True)
+            label.set_justify(Gtk.Justification.LEFT)
+            label.set_markup('<span size="large">%s</span>' % persona_name)
+            
+            alignment = Gtk.Alignment.new(0, 0, 0, 0)
+            alignment.add(label)
+            label.show()
+            
+            evbox = Gtk.EventBox()
+            self._persona_evboxes[persona_name] = evbox
+            evbox.connect('button-press-event', self._persona_changed_event_cb, persona_name)
+            
+            # Highlight current persona
+            if persona_name == self._current_persona:
+                evbox.modify_bg(0, style.COLOR_BUTTON_GREY.get_gdk_color())
+            
+            evbox.add(alignment)
+            alignment.show()
+            
+            # Distribute personas across 3 columns
+            if count <= 3:
+                persona_vboxes[i].pack_start(evbox, True, True, 0)
+            elif i < count // 3:
+                persona_vboxes[0].pack_start(evbox, True, True, 0)
+            elif i < 2 * count // 3:
+                persona_vboxes[1].pack_start(evbox, True, True, 0)
+            else:
+                persona_vboxes[2].pack_start(evbox, True, True, 0)
+            evbox.show()
+        
+        # Pack the columns
+        persona_hbox = Gtk.HBox()
+        persona_hbox.pack_start(persona_vboxes[0], True, True, style.DEFAULT_PADDING)
+        persona_hbox.pack_start(persona_vboxes[1], True, True, style.DEFAULT_PADDING)
+        persona_hbox.pack_start(persona_vboxes[2], True, True, style.DEFAULT_PADDING)
+        self._persona_box.pack_start(persona_hbox, False, False, style.DEFAULT_PADDING)
+        persona_hbox.show_all()
+        
+        # Create the palette button
+        persona_palette_button = ToolButton('Personas_Icon')
+        persona_palette_button.set_tooltip(_('Choose persona:'))
+        self._persona_palette = persona_palette_button.get_palette()
+        self._persona_palette.set_content(self._persona_box)
+        self._persona_box.show_all()
+        persona_palette_button.connect('clicked', self._face_palette_cb)
+        persona_bar.insert(persona_palette_button, -1)
+        persona_palette_button.show()
+        
+        persona_bar.show_all()
+        return persona_bar
 
     def _kokoro_voice_changed_event_cb(self, widget, event, voice_name):
         # Show info label(Indication of voice changing) upon click
@@ -912,13 +1037,74 @@ class SpeakActivity(activity.Activity):
                     evbox.modify_bg(0, style.COLOR_BLACK.get_gdk_color())
             self._kokoro_voice_evboxes[voice_name].modify_bg(0, style.COLOR_BUTTON_GREY.get_gdk_color())
             
-            # Actually set the voice (may trigger download)
-            #TODO: Better indication before downloading voices / ask for confirmation before downloading.
+            # Actually set the voice (may trigger download from Hugging Face Hub)
             speech.get_speech().set_kokoro_voice(voice_name)
             self.face.say_notification(_('Kokoro voice changed'))
             return False
 
         GLib.idle_add(async_check_and_update)
+
+    def _persona_changed_event_cb(self, widget, event, persona_name):
+        """Handle persona selection change"""
+        logger.debug('persona_changed_event_cb %s' % persona_name)
+        
+        # Update visual selection
+        for old_persona in list(self._persona_evboxes.keys()):
+            self._persona_evboxes[old_persona].modify_bg(
+                0, style.COLOR_BLACK.get_gdk_color())
+        
+        self._persona_evboxes[persona_name].modify_bg(
+            0, style.COLOR_BUTTON_GREY.get_gdk_color())
+        
+        # Set current persona
+        self._current_persona = persona_name
+        
+        # Get the persona's voice and set it (using Kokoro voices)
+        persona_voice_name = self._personas[persona_name]['voice']
+        
+        # Update Kokoro voice selection visually
+        current_kokoro_voice = speech.get_speech().current_kokoro_voice
+        if persona_voice_name in self._kokoro_voice_evboxes:
+            # Clear old Kokoro voice selection
+            if current_kokoro_voice in self._kokoro_voice_evboxes:
+                self._kokoro_voice_evboxes[current_kokoro_voice].modify_bg(
+                    0, style.COLOR_BLACK.get_gdk_color())
+            
+            # Highlight new Kokoro voice selection
+            self._kokoro_voice_evboxes[persona_voice_name].modify_bg(
+                0, style.COLOR_BUTTON_GREY.get_gdk_color())
+            
+            # Set the Kokoro voice
+            speech.get_speech().set_kokoro_voice(persona_voice_name)
+        
+        # Notify about persona change
+        self.face.say_notification(_('Persona changed to %s') % persona_name)
+
+    def _set_persona_voice(self):
+        """Set the voice based on the current persona"""
+        if not self._current_persona or self._current_persona not in self._personas:
+            return
+            
+        persona_voice_name = self._personas[self._current_persona]['voice']
+        
+        # Set the Kokoro voice for the persona
+        if persona_voice_name in speech.get_speech().get_available_kokoro_voices():
+            speech.get_speech().set_kokoro_voice(persona_voice_name)
+            logger.debug(f"Set persona voice to Kokoro voice: {persona_voice_name}")
+            
+            # Update Kokoro voice visual selection if the kokoro bar exists
+            if hasattr(self, '_kokoro_voice_evboxes') and persona_voice_name in self._kokoro_voice_evboxes:
+                # Clear old selection
+                current_kokoro_voice = speech.get_speech().current_kokoro_voice
+                if current_kokoro_voice in self._kokoro_voice_evboxes:
+                    self._kokoro_voice_evboxes[current_kokoro_voice].modify_bg(
+                        0, style.COLOR_BLACK.get_gdk_color())
+                
+                # Highlight new selection
+                self._kokoro_voice_evboxes[persona_voice_name].modify_bg(
+                    0, style.COLOR_BUTTON_GREY.get_gdk_color())
+        else:
+            logger.warning(f"Persona voice {persona_voice_name} not found in available Kokoro voices")
 
     def _photo_face_cb(self, widget):
         chooser = ObjectChooser(parent=self,
@@ -1133,11 +1319,16 @@ class SpeakActivity(activity.Activity):
     def _try_llm_response(self, text):
         """Try to get response from LLM. Returns response string or None if failed."""
 
-        if not is_profane(text): #if input text is profane don't even try to get response, intercept
+        if not is_profane(text):
             return "Hmm, that word isn't very friendly. Talking with kind words makes chatting more fun! Can you try again with a friendly word?"
         
         try:
-            llm_response = ask_llm_prompted(question = text)
+            # Get the current persona's prompt
+            custom_prompt = self._personas.get(self._current_persona, {}).get('prompt', None)
+            if not custom_prompt:
+                custom_prompt = DEFAULT_PROMPT
+            
+            llm_response = ask_llm_prompted(question=text, custom_prompt=custom_prompt)
 
             if llm_response == None:
                 logging.error("LLM returned None response")
@@ -1155,7 +1346,7 @@ class SpeakActivity(activity.Activity):
     def _try_slm_response(self, text):
         """Try to get response from SLM. Returns response string or None if failed."""
 
-        if not is_profane(text): #if input text is profane don't even try to get response, intercept
+        if not is_profane(text):
             return "Hmm, that word isn't very friendly. Talking with kind words makes chatting more fun! Can you try again with a friendly word?"
 
         try:
@@ -1220,16 +1411,16 @@ class SpeakActivity(activity.Activity):
                     # Use traditional brain chatbot
                     brain_response = brain.respond(text)
 
-                    if not is_profane(text): #Text (input) is not profane, contains a bad word
-                        brain_response = "Hmm, that word isn't very friendly. Talking with kind words makes chatting more fun! Can you try again with a friendly word?"
-
-                    if not is_profane(brain_response): #Brain response is not profane
-                        brain_response = "Sorry, I was not able to generate this response."
+                    if not is_profane(text):
+                        brain_response = "Sorry, looks like you have entered a blacklisted word. Please try typing something else."
+                    
+                    if not is_profane(brain_response):
+                        brain_response = "Sorry, I was not able to generate this response. Profanity intercept."
 
                     self.face.say(brain_response)
             else:
-                if not is_profane(text): #Text (input) is not profane, contains a bad word
-                    text = "Hmm, that word isn't very friendly. Talking with kind words makes chatting more fun! Can you try again with a friendly word?"
+                if not is_profane(text):
+                    text = "Sorry, looks like you have entered a blacklisted word. Please try typing something else."
                 self.face.say(text)
 
         if text and not self._tablet_mode:
