@@ -162,7 +162,10 @@ class Speech(GstSpeechPlayer):
                 return True
 
             # Handle invalid duration
-            if data.duration == 0 or data.duration == Gst.CLOCK_TIME_NONE or data.duration > Gst.SECOND * 10:
+            if ( data.duration == 0 
+                or data.duration == Gst.CLOCK_TIME_NONE 
+                or data.duration > Gst.SECOND * 10
+            ):
                 logger.debug("Invalid duration detected, using fallback duration calculation")
                 # Assume 16-bit, 1 channel, 16000 Hz for duration calculation
                 SAMPLE_RATE = 16000
