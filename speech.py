@@ -17,6 +17,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 import numpy
+import threading
 
 from gi.repository import Gst
 from gi.repository import GLib
@@ -55,7 +56,7 @@ class Speech(GstSpeechPlayer):
         # Initialize Kokoro pipeline if available
         self.kokoro_pipeline = None
         if KOKORO_AVAILABLE:
-            GLib.idle_add(self.setup_kokoro)
+            threading.Thread(target=self.setup_kokoro).start()
         
         # Predefined Kokoro voices for future GUI selection - TODO
         self.kokoro_voices = [
