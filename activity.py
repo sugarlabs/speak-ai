@@ -961,43 +961,48 @@ class SpeakActivity(activity.Activity):
             kokoro_pipeline = speech.get_speech().kokoro_pipeline
             is_local = False
             if kokoro_pipeline:
-                is_local = voice_name in kokoro_pipeline.voices
                 if not is_local:
                     try:
-                        from huggingface_hub import hf_hub_download
+                        import huggingface_hub
+                        repo_id = kokoro_pipeline.repo_id
+                        message = _('This voice is being downloaded, please wait')
+                        info_label.set_markup('<span foreground="blue" size="large">%s</span>' % message)
+                        voice_path = huggingface_hub.hf_hub_download(
+                            repo_id=repo_id,
+                            filename=f'voices/{voice_name}.pt',
+                            cache_dir=None,
+                            force_download=False,
+                            resume_download=False
+                        )
+                        is_local = os.path.exists(voice_path)
                     except ImportError:
-                        logging.error("Hugging Face Hub was not installed, or could not be imported. Aborting")
-                        info_label.set_markup('<span foreground="red" size="large">%s</span>' % _('Hugging Face Hub is not installed.'))
-                        return False
-                    
-                    repo_id = kokoro_pipeline.repo_id
-                    voice_path = hf_hub_download(repo_id=repo_id, filename=f'voices/{voice_name}.pt', cache_dir=None, force_download=False, resume_download=False)
-                    is_local = os.path.exists(voice_path)
+                        message = _('Hugging Face Hub is not installed')
+                        info_label.set_markup('<span foreground="red" size="large">%s</span>' % message)
+                    except huggingface_hub.errors.LocalEntryNotFoundError:
+                        message = _("Can't download voice as there's no internet connection")
+                        info_label.set_markup('<span foreground="red" size="large">%s</span>' % message)
             else:
                 is_local = True
-            # Always speak notification before changing voice
-            
-            if not is_local:
-                info_label.set_markup('<span foreground="blue" size="large">%s</span>' % _('This voice is being downloaded, please wait'))
-            else:
-                info_label.set_markup('<span foreground="green" size="large">%s</span>' % _('Changing voice, please wait'))
+
+            if is_local:
+                message = _('Changing voice, please wait')
+                info_label.set_markup('<span foreground="green" size="large">%s</span>' % message)
+                # Now update UI for voice selection
+                for old_name, evbox in self._kokoro_voice_evboxes.items():
+                    if old_name == speech.get_speech().current_kokoro_voice:
+                        evbox.modify_bg(0, style.COLOR_BLACK.get_gdk_color())
+                self._kokoro_voice_evboxes[voice_name].modify_bg(0, style.COLOR_BUTTON_GREY.get_gdk_color())
+
+                # Actually set the voice (may trigger download from Hugging Face Hub)
+                speech.get_speech().set_kokoro_voice(voice_name)
+                self.face.say_notification(_('Kokoro voice changed'))
+
             while Gtk.events_pending():
                 Gtk.main_iteration()
-            def remove_info_label():
-                self._kokoro_voice_box.remove(info_label)
-                return False
-            GLib.timeout_add(3000, remove_info_label)
 
-            # Now update UI for voice selection
-            for old_name, evbox in self._kokoro_voice_evboxes.items():
-                if old_name == speech.get_speech().current_kokoro_voice:
-                    evbox.modify_bg(0, style.COLOR_BLACK.get_gdk_color())
-            self._kokoro_voice_evboxes[voice_name].modify_bg(0, style.COLOR_BUTTON_GREY.get_gdk_color())
-            
-            # Actually set the voice (may trigger download from Hugging Face Hub)
-            speech.get_speech().set_kokoro_voice(voice_name)
-            self.face.say_notification(_('Kokoro voice changed'))
-            return False
+            def _remove_info_label():
+                self._kokoro_voice_box.remove(info_label)
+            GLib.timeout_add(3000, _remove_info_label)
 
         GLib.idle_add(async_check_and_update)
 
