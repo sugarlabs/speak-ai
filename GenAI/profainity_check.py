@@ -38,5 +38,5 @@ def is_profane(text: str) -> bool:
         blacklist = set(word.lower() for word in bad_word_list())
         for w in words:
             if w in blacklist:
-                return False
-        return True
+                return True
+        return False
