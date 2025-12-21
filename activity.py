@@ -1280,7 +1280,7 @@ class SpeakActivity(activity.Activity):
     def _try_llm_response(self, text):
         """Try to get response from LLM. Returns response string or None if failed."""
 
-        if not is_profane(text):
+        if is_profane(text):
             return "Hmm, that word isn't very friendly. Talking with kind words makes chatting more fun! Can you try again with a friendly word?"
         
         try:
@@ -1295,7 +1295,7 @@ class SpeakActivity(activity.Activity):
                 logging.error("LLM returned None response")
                 return None
 
-            if not is_profane(llm_response):
+            if is_profane(llm_response):
                 llm_response = "Sorry, I was not able to generate this response."
 
             return llm_response
@@ -1307,7 +1307,7 @@ class SpeakActivity(activity.Activity):
     def _try_slm_response(self, text):
         """Try to get response from SLM. Returns response string or None if failed."""
 
-        if not is_profane(text):
+        if is_profane(text):
             return "Hmm, that word isn't very friendly. Talking with kind words makes chatting more fun! Can you try again with a friendly word?"
 
         try:
@@ -1316,7 +1316,7 @@ class SpeakActivity(activity.Activity):
             model.set_generation_mode(3)
 
             model_output = model.ask_question(text)
-            if not is_profane(model_output):
+            if is_profane(model_output):
                 model_output = "Sorry, I was not able to generate this response."
             return model_output
         
@@ -1372,15 +1372,15 @@ class SpeakActivity(activity.Activity):
                     # Use traditional brain chatbot
                     brain_response = brain.respond(text)
 
-                    if not is_profane(text):
+                    if is_profane(text):
                         brain_response = "Sorry, looks like you have entered a blacklisted word. Please try typing something else."
                     
-                    if not is_profane(brain_response):
+                    if is_profane(brain_response):
                         brain_response = "Sorry, I was not able to generate this response. Profanity intercept."
 
                     self.face.say(brain_response)
             else:
-                if not is_profane(text):
+                if is_profane(text):
                     text = "Sorry, looks like you have entered a blacklisted word. Please try typing something else."
                 self.face.say(text)
 
