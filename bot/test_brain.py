@@ -21,6 +21,9 @@ import aiml
 import os.path
 
 k = aiml.Kernel()
-k.loadBrain("alice.brn")
+BRAIN_PATH = os.path.join(os.path.dirname(__file__), "alice.brn")
+k.loadBrain(BRAIN_PATH)
 
-while True: print((k.respond(eval(input("Pregunta > "))))) 
+if __name__ == "__main__":
+    while True:
+        print(k.respond(eval(input("Pregunta > "))))
