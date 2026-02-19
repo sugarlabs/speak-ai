@@ -1,8 +1,6 @@
 llama-cpp-python
-huggingface_hub
-misaki
 spacy
 numpy
-torch
-transformers
 requests
+kokoro-onnx
+soundfile

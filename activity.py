@@ -949,62 +949,24 @@ class SpeakActivity(activity.Activity):
         self._persona_box.show_all()
         
     def _kokoro_voice_changed_event_cb(self, widget, event, voice_name):
-        # Show info label(Indication of voice changing) upon click
-        info_label = Gtk.Label()
-        info_label.set_markup('<span foreground="blue" size="large">%s</span>' % _('Please wait...'))
-        self._kokoro_voice_box.pack_start(info_label, False, False, style.DEFAULT_PADDING)
-        info_label.show()
-        while Gtk.events_pending():
-            Gtk.main_iteration()
+        # Update UI (Visual Feedback)
+        current_voice = speech.get_speech().current_kokoro_voice
+        
+        # Deselect old voice
+        if current_voice in self._kokoro_voice_evboxes:
+            self._kokoro_voice_evboxes[current_voice].modify_bg(
+                0, style.COLOR_BLACK.get_gdk_color())
+        
+        # Select new voice
+        if voice_name in self._kokoro_voice_evboxes:
+            self._kokoro_voice_evboxes[voice_name].modify_bg(
+                0, style.COLOR_BUTTON_GREY.get_gdk_color())
 
-        def async_check_and_update():
-            kokoro_pipeline = speech.get_speech().kokoro_pipeline
-            is_local = False
-            if kokoro_pipeline:
-                if not is_local:
-                    try:
-                        import huggingface_hub
-                        repo_id = kokoro_pipeline.repo_id
-                        message = _('This voice is being downloaded, please wait')
-                        info_label.set_markup('<span foreground="blue" size="large">%s</span>' % message)
-                        voice_path = huggingface_hub.hf_hub_download(
-                            repo_id=repo_id,
-                            filename=f'voices/{voice_name}.pt',
-                            cache_dir=None,
-                            force_download=False,
-                            resume_download=False
-                        )
-                        is_local = os.path.exists(voice_path)
-                    except ImportError:
-                        message = _('Hugging Face Hub is not installed')
-                        info_label.set_markup('<span foreground="red" size="large">%s</span>' % message)
-                    except huggingface_hub.errors.LocalEntryNotFoundError:
-                        message = _("Can't download voice as there's no internet connection")
-                        info_label.set_markup('<span foreground="red" size="large">%s</span>' % message)
-            else:
-                is_local = True
-
-            if is_local:
-                message = _('Changing voice, please wait')
-                info_label.set_markup('<span foreground="green" size="large">%s</span>' % message)
-                # Now update UI for voice selection
-                for old_name, evbox in self._kokoro_voice_evboxes.items():
-                    if old_name == speech.get_speech().current_kokoro_voice:
-                        evbox.modify_bg(0, style.COLOR_BLACK.get_gdk_color())
-                self._kokoro_voice_evboxes[voice_name].modify_bg(0, style.COLOR_BUTTON_GREY.get_gdk_color())
-
-                # Actually set the voice (may trigger download from Hugging Face Hub)
-                speech.get_speech().set_kokoro_voice(voice_name)
-                self.face.say_notification(_('Kokoro voice changed'))
-
-            while Gtk.events_pending():
-                Gtk.main_iteration()
-
-            def _remove_info_label():
-                self._kokoro_voice_box.remove(info_label)
-            GLib.timeout_add(3000, _remove_info_label)
-
-        GLib.idle_add(async_check_and_update)
+        # Set the voice in the backend
+        speech.get_speech().set_kokoro_voice(voice_name)
+        
+        # Notify user
+        self.face.say_notification(_('Voice changed to %s') % voice_name)
 
     def _persona_changed_event_cb(self, widget, event, persona_name):
         """Handle persona selection change"""
@@ -1279,6 +1241,8 @@ class SpeakActivity(activity.Activity):
 
     def _try_llm_response(self, text):
         """Try to get response from LLM. Returns response string or None if failed."""
+        if not text or not isinstance(text, str):
+            return None
 
         if is_profane(text):
             return "Hmm, that word isn't very friendly. Talking with kind words makes chatting more fun! Can you try again with a friendly word?"
