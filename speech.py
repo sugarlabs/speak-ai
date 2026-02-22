@@ -60,6 +60,7 @@ class Speech(GstSpeechPlayer):
         # Each language gets its own KPipeline (lazy-loaded on first use).
         self._kokoro_model = None        # shared KModel instance
         self._kokoro_pipelines = {}      # lang_code -> KPipeline
+        self._kokoro_lock = threading.Lock()  # guards _kokoro_pipelines
         self.kokoro_pipeline = None       # active pipeline (backward compat)
         self._kokoro_ready = False
 
@@ -81,9 +82,11 @@ class Speech(GstSpeechPlayer):
         try:
             self._kokoro_model = KModel(repo_id='hexgrad/Kokoro-82M')
             logger.debug('Kokoro KModel loaded successfully')
+            # Mark ready as soon as the model is loaded so other threads
+            # can request pipelines via _get_or_create_pipeline.
+            self._kokoro_ready = True
             # Pre-load the default (American English) pipeline
             self._get_or_create_pipeline('a')
-            self._kokoro_ready = True
         except Exception as e:
             logger.error('Failed to load Kokoro model: %s', e)
 
@@ -93,32 +96,33 @@ class Speech(GstSpeechPlayer):
         All pipelines share the same underlying KModel so only the G2P layer
         is duplicated — this keeps memory usage low.
         """
-        if lang_code in self._kokoro_pipelines:
-            return self._kokoro_pipelines[lang_code]
+        with self._kokoro_lock:
+            if lang_code in self._kokoro_pipelines:
+                return self._kokoro_pipelines[lang_code]
 
-        if self._kokoro_model is None:
-            logger.warning(
-                'KModel not yet loaded; cannot create pipeline for %s',
-                lang_code)
-            return None
+            if self._kokoro_model is None:
+                logger.warning(
+                    'KModel not yet loaded; cannot create pipeline for %s',
+                    lang_code)
+                return None
 
-        try:
-            pipe = KPipeline(
-                lang_code=lang_code,
-                repo_id='hexgrad/Kokoro-82M',
-                model=self._kokoro_model,
-            )
-            self._kokoro_pipelines[lang_code] = pipe
-            logger.info(
-                'Created Kokoro pipeline for %s (%s)',
-                lang_code,
-                language_config.get_language_name(lang_code))
-            return pipe
-        except Exception as e:
-            logger.error(
-                'Failed to create Kokoro pipeline for %s: %s',
-                lang_code, e)
-            return None
+            try:
+                pipe = KPipeline(
+                    lang_code=lang_code,
+                    repo_id='hexgrad/Kokoro-82M',
+                    model=self._kokoro_model,
+                )
+                self._kokoro_pipelines[lang_code] = pipe
+                logger.info(
+                    'Created Kokoro pipeline for %s (%s)',
+                    lang_code,
+                    language_config.get_language_name(lang_code))
+                return pipe
+            except Exception as e:
+                logger.error(
+                    'Failed to create Kokoro pipeline for %s: %s',
+                    lang_code, e)
+                return None
 
     def _resolve_pipeline_for_voice(self, voice_name):
         """Return the correct KPipeline for a given voice name."""
@@ -158,18 +162,27 @@ class Speech(GstSpeechPlayer):
             old_lang = language_config.get_lang_code_for_voice(
                 self.current_kokoro_voice)
             new_lang = language_config.get_lang_code_for_voice(voice_name)
-            self.current_kokoro_voice = voice_name
 
-            # Switch the active pipeline if the language changed
+            # Switch the active pipeline if the language changed.
+            # Resolve the pipeline *before* updating current_kokoro_voice
+            # so the voice stays consistent if pipeline creation fails.
             if old_lang != new_lang:
                 new_pipe = self._resolve_pipeline_for_voice(voice_name)
                 if new_pipe is not None:
                     self.kokoro_pipeline = new_pipe
+                    self.current_kokoro_voice = voice_name
                     logger.info(
                         'Switched Kokoro pipeline: %s -> %s (%s)',
                         language_config.get_language_name(old_lang),
                         language_config.get_language_name(new_lang),
                         voice_name)
+                else:
+                    logger.warning(
+                        'Pipeline creation failed for %s; keeping %s',
+                        voice_name, self.current_kokoro_voice)
+                    return
+            else:
+                self.current_kokoro_voice = voice_name
 
             logger.debug('Kokoro voice set to: %s', voice_name)
         else:
@@ -187,6 +200,8 @@ class Speech(GstSpeechPlayer):
         result = {}
         for lang_code in language_config.get_supported_language_codes():
             voices = language_config.get_voices_for_language(lang_code)
+            # voices is always non-empty for codes in VOICE_REGISTRY,
+            # but we guard defensively for future registry changes.
             if voices:
                 label = language_config.get_language_display_label(
                     voices[0])

@@ -138,7 +138,8 @@ class KPipeline:
                         en_callable=en_callable
                     )
                 except TypeError:
-                    # Older misaki versions: ZHG2P takes no arguments
+                    # Older misaki versions: ZHG2P() takes no arguments
+                    logger.info('ZHG2P constructor does not accept args; using no-arg fallback')
                     self.g2p = zh.ZHG2P()
             except ImportError:
                 logger.error("You need to `pip install misaki[zh]` to use lang_code='z'")
@@ -442,8 +443,13 @@ class KPipeline:
                     # - espeak.EspeakG2P, ja.JAG2P, zh.ZHG2P return str
                     if isinstance(g2p_result, tuple):
                         ps = g2p_result[0]
-                    else:
+                    elif isinstance(g2p_result, str):
                         ps = g2p_result
+                    else:
+                        logger.warning(
+                            f'Unexpected G2P return type {type(g2p_result)!r}; converting to string'
+                        )
+                        ps = str(g2p_result)
                     if not ps:
                         continue
                     elif len(ps) > 510:
