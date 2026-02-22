@@ -1,55 +1,128 @@
-What is this?
-=============
+# Speak Activity 🎤
 
-Speak is a voice synthesis activity for the Sugar desktop.
+Speak is a voice synthesis activity for the Sugar desktop environment.
 
-Speak shows a face that will talk what is typed, within reason.
+It displays an animated face that speaks the text entered by the user, providing an interactive and educational text-to-speech experience.
 
-How to use?
-===========
+---
 
-Speak is part of the Sugar desktop and is often included.  Please refer to;
+## 🧠 Overview
 
-* [How to Get Sugar on sugarlabs.org](https://sugarlabs.org/),
-* [How to use Sugar](https://help.sugarlabs.org/),
-* [Download Speak using Browse](https://v4.activities.sugarlabs.org/), search for `Speak`, then download, and;
-* [How to use Speak](https://help.sugarlabs.org/en/speak.html).
+Speak is designed for use within the Sugar learning platform and is commonly included in Sugar distributions.
+It helps children and learners explore speech synthesis in a fun and accessible way.
 
-How to upgrade?
-===============
+---
 
-On Sugar desktop systems;
-* use [My Settings](https://help.sugarlabs.org/en/my_settings.html), [Software Update](https://help.sugarlabs.org/en/my_settings.html#software-update), or;
-* use Browse to open [v4.activities.sugarlabs.org](https://v4.activities.sugarlabs.org/), search for `Speak`, then download.
+## 🚀 How to Use
 
-How to integrate?
-=================
+Speak is part of the Sugar desktop environment.
+Refer to the following resources:
 
-Speak depends on Python, [Sugar Toolkit for GTK+ 3](https://github.com/sugarlabs/sugar-toolkit-gtk3), GStreamer 1, GTK+ 3, and gst-plugins-espeak.
+* Get Sugar: https://sugarlabs.org/
+* Sugar Help: https://help.sugarlabs.org/
+* Download Speak via activities portal: https://v4.activities.sugarlabs.org/
+* Usage Guide: https://help.sugarlabs.org/en/speak.html
 
-Speak is started by [Sugar](https://github.com/sugarlabs/sugar).
+---
 
-Speak is [packaged by Fedora](https://src.fedoraproject.org/rpms/sugar-speak).  On Fedora systems;
+## ⬆️ How to Upgrade
 
-```
+On Sugar desktop systems:
+
+* Use **My Settings → Software Update**, or
+* Open https://v4.activities.sugarlabs.org/ in Browse
+
+  * Search for **Speak**
+  * Download and install
+
+---
+
+## 🔧 Integration & Dependencies
+
+Speak depends on the following technologies:
+
+* Python
+* Sugar Toolkit for GTK+ 3
+  https://github.com/sugarlabs/sugar-toolkit-gtk3
+* GStreamer 1
+* GTK+ 3
+* gst-plugins-espeak
+
+Speak is launched and managed by the Sugar environment.
+
+Sugar source: https://github.com/sugarlabs/sugar
+
+---
+
+## 📦 Installation (Fedora)
+
+Speak is packaged for Fedora systems.
+
+Install using:
+
+```bash
 dnf install sugar-speak
 ```
 
-Speak is not packaged by Debian and Ubuntu distributions.  On Debian
-and Ubuntu systems dependencies include `gstreamer1.0-espeak`,
-`gir1.2-gstreamer-1.0`, and `gir1.2-gst-plugins-base-1.0`.
+---
 
-Branch master
-=============
+## 🐧 Debian / Ubuntu Notes
 
-The `master` branch targets an environment with latest stable release
-of [Sugar](https://github.com/sugarlabs/sugar), with dependencies on
-latest stable release of Fedora and Debian distributions.
+Speak is not officially packaged for Debian and Ubuntu.
+Required dependencies include:
 
-Branch not-gstreamer1
-=====================
+* gstreamer1.0-espeak
+* gir1.2-gstreamer-1.0
+* gir1.2-gst-plugins-base-1.0
 
-The `not-gstreamer1` branch is a backport of features and bug fixes
-from the `master` branch for ongoing maintenance of the activity on
-Fedora 18 systems which don't have well-functioning GStreamer 1
-packages.
+Manual setup may be required.
+
+---
+
+## 🌿 Branch Information
+
+### master
+
+Targets the latest stable Sugar release and modern Fedora/Debian environments.
+
+---
+
+### not-gstreamer1
+
+A legacy branch that backports fixes from `master`
+for older systems (e.g., Fedora 18) without stable GStreamer 1 support.
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions from developers and beginners!
+
+Ways to contribute:
+
+* Improve documentation
+* Fix bugs
+* Modernize dependencies
+* Improve accessibility
+
+Steps:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make changes
+4. Submit a Pull Request
+
+---
+
+## 🌍 About Sugar Labs
+
+This project is maintained by the Sugar Labs community,
+which builds open-source educational software for children worldwide.
+
+Learn more: https://sugarlabs.org/
+
+---
+
+## 📜 License
+
+Refer to the LICENSE file in this repository.
