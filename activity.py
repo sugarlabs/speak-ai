@@ -958,7 +958,7 @@ class SpeakActivity(activity.Activity):
             Gtk.main_iteration()
 
         def async_check_and_update():
-            kokoro_pipeline = speech.get_speech().kokoro_pipeline
+            kokoro_pipeline = speech.get_speech()._resolve_pipeline_for_voice(voice_name)
             is_local = False
             if kokoro_pipeline:
                 if not is_local:

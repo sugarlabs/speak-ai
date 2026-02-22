@@ -131,10 +131,15 @@ class KPipeline:
         elif lang_code == 'z':
             try:
                 from misaki import zh
-                self.g2p = zh.ZHG2P(
-                    version=None if repo_id.endswith('/Kokoro-82M') else '1.1',
-                    en_callable=en_callable
-                )
+                # Handle both old misaki (no args) and new misaki (with args)
+                try:
+                    self.g2p = zh.ZHG2P(
+                        version=None if repo_id.endswith('/Kokoro-82M') else '1.1',
+                        en_callable=en_callable
+                    )
+                except TypeError:
+                    # Older misaki versions: ZHG2P takes no arguments
+                    self.g2p = zh.ZHG2P()
             except ImportError:
                 logger.error("You need to `pip install misaki[zh]` to use lang_code='z'")
                 raise
@@ -430,8 +435,15 @@ class KPipeline:
                 for chunk in chunks:
                     if not chunk.strip():
                         continue
-                        
-                    ps, _ = self.g2p(chunk)
+
+                    g2p_result = self.g2p(chunk)
+                    # Normalize G2P output format:
+                    # - en.G2P returns tuple(phonemes_str, tokens_list)
+                    # - espeak.EspeakG2P, ja.JAG2P, zh.ZHG2P return str
+                    if isinstance(g2p_result, tuple):
+                        ps = g2p_result[0]
+                    else:
+                        ps = g2p_result
                     if not ps:
                         continue
                     elif len(ps) > 510:

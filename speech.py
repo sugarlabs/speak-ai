@@ -30,11 +30,13 @@ from sugar3.speech import GstSpeechPlayer
 
 # Kokoro TTS imports
 try:
-    from kokoro import KPipeline
+    from kokoro import KPipeline, KModel
     KOKORO_AVAILABLE = True
 except ImportError:
     KOKORO_AVAILABLE = False
     logger.warning("Kokoro not available, falling back to espeak")
+
+import language_config
 
 PITCH_MIN = 0
 PITCH_MAX = 200
@@ -52,32 +54,87 @@ class Speech(GstSpeechPlayer):
     def __init__(self):
         GstSpeechPlayer.__init__(self)
         self.pipeline = None
-        
-        # Initialize Kokoro pipeline if available
-        self.kokoro_pipeline = None
+
+        # Initialize Kokoro multilingual pipeline system
+        # We share one KModel across all language pipelines to save memory.
+        # Each language gets its own KPipeline (lazy-loaded on first use).
+        self._kokoro_model = None        # shared KModel instance
+        self._kokoro_pipelines = {}      # lang_code -> KPipeline
+        self.kokoro_pipeline = None       # active pipeline (backward compat)
+        self._kokoro_ready = False
+
         if KOKORO_AVAILABLE:
-            threading.Thread(target=self.setup_kokoro).start()
-        
-        # Predefined Kokoro voices for future GUI selection - TODO
-        self.kokoro_voices = [
-            'af_heart', 'af_alloy', 'af_aoede', 'af_bella', 'af_jessica', 'af_kore', 'af_nicole',
-            'af_nova', 'af_river', 'af_sarah', 'af_sky','am_adam', 'am_echo', 'am_eric', 'am_fenrir',
-            'am_adam', 'am_echo', 'am_eric', 'am_fenrir', 'am_liam', 'am_michael', 'am_onyx',
-            'am_puck', 'am_santa', 'bf_alice', 'bf_emma', 'bf_isabella', 'bf_lily', 'bm_daniel',
-            'bm_fable', 'bm_george', 'bm_lewis', 'jf_alpha', 'jf_gongitsune', 'jf_nezumi', 'jf_tebukuro',
-            'jm_kumo', 'zf_xiaobei', 'zf_xiaoni', 'zf_xiaoxiao', 'zf_xiaoyi', 'zm_yunjian',
-            'zm_yunxi', 'zm_yunxia', 'zm_yunyang', 'ef_dora', 'em_alex', 'em_santa',
-            'ff_siwis', 'hf_alpha', 'hf_beta', 'hm_omega', 'hm_psi',
-            'if_sara', 'im_nicola', 'pf_dora', 'pm_alex', 'pm_santa'
-        ]
+            threading.Thread(target=self._setup_kokoro_model, daemon=True).start()
+
+        # Voice list sourced from centralized language_config
+        self.kokoro_voices = language_config.get_all_voices()
         self.current_kokoro_voice = 'af_heart'
 
         self._cb = {}
         for cb in ['peak', 'wave', 'idle']:
             self._cb[cb] = None
 
+    # -- Kokoro initialization helpers ----------------------------------------
+
+    def _setup_kokoro_model(self):
+        """Load the shared KModel once, then bootstrap the default pipeline."""
+        try:
+            self._kokoro_model = KModel(repo_id='hexgrad/Kokoro-82M')
+            logger.debug('Kokoro KModel loaded successfully')
+            # Pre-load the default (American English) pipeline
+            self._get_or_create_pipeline('a')
+            self._kokoro_ready = True
+        except Exception as e:
+            logger.error('Failed to load Kokoro model: %s', e)
+
+    def _get_or_create_pipeline(self, lang_code):
+        """Return a KPipeline for *lang_code*, creating it lazily if needed.
+
+        All pipelines share the same underlying KModel so only the G2P layer
+        is duplicated — this keeps memory usage low.
+        """
+        if lang_code in self._kokoro_pipelines:
+            return self._kokoro_pipelines[lang_code]
+
+        if self._kokoro_model is None:
+            logger.warning(
+                'KModel not yet loaded; cannot create pipeline for %s',
+                lang_code)
+            return None
+
+        try:
+            pipe = KPipeline(
+                lang_code=lang_code,
+                repo_id='hexgrad/Kokoro-82M',
+                model=self._kokoro_model,
+            )
+            self._kokoro_pipelines[lang_code] = pipe
+            logger.info(
+                'Created Kokoro pipeline for %s (%s)',
+                lang_code,
+                language_config.get_language_name(lang_code))
+            return pipe
+        except Exception as e:
+            logger.error(
+                'Failed to create Kokoro pipeline for %s: %s',
+                lang_code, e)
+            return None
+
+    def _resolve_pipeline_for_voice(self, voice_name):
+        """Return the correct KPipeline for a given voice name."""
+        lang_code = language_config.get_lang_code_for_voice(voice_name)
+        pipe = self._get_or_create_pipeline(lang_code)
+        if pipe is None:
+            # Fall back to American English pipeline
+            logger.warning(
+                'Falling back to American English pipeline for voice %s',
+                voice_name)
+            pipe = self._get_or_create_pipeline('a')
+        return pipe
+
     def setup_kokoro(self):
-        self.kokoro_pipeline = KPipeline(lang_code='a')
+        """Legacy setup method — delegates to new model-based init."""
+        self._setup_kokoro_model()
 
     def disconnect_all(self):
         for cb in ['peak', 'wave', 'idle']:
@@ -96,14 +153,45 @@ class Speech(GstSpeechPlayer):
         self._cb['idle'] = self.connect('idle', cb)
 
     def set_kokoro_voice(self, voice_name):
+        """Set the active Kokoro voice and update the active pipeline."""
         if voice_name in self.kokoro_voices:
+            old_lang = language_config.get_lang_code_for_voice(
+                self.current_kokoro_voice)
+            new_lang = language_config.get_lang_code_for_voice(voice_name)
             self.current_kokoro_voice = voice_name
-            logger.debug(f"Kokoro voice set to: {voice_name}")
+
+            # Switch the active pipeline if the language changed
+            if old_lang != new_lang:
+                new_pipe = self._resolve_pipeline_for_voice(voice_name)
+                if new_pipe is not None:
+                    self.kokoro_pipeline = new_pipe
+                    logger.info(
+                        'Switched Kokoro pipeline: %s -> %s (%s)',
+                        language_config.get_language_name(old_lang),
+                        language_config.get_language_name(new_lang),
+                        voice_name)
+
+            logger.debug('Kokoro voice set to: %s', voice_name)
         else:
-            logger.warning(f"Invalid Kokoro voice: {voice_name}.")
+            logger.warning('Invalid Kokoro voice: %s', voice_name)
 
     def get_available_kokoro_voices(self):
         return self.kokoro_voices.copy()
+
+    def get_voices_by_language(self):
+        """Return voices organised by language for UI display.
+
+        Returns:
+            dict mapping language display-name to list of voice names.
+        """
+        result = {}
+        for lang_code in language_config.get_supported_language_codes():
+            voices = language_config.get_voices_for_language(lang_code)
+            if voices:
+                label = language_config.get_language_display_label(
+                    voices[0])
+                result[label] = voices
+        return result
 
     def get_default_kokoro_voices(self):
         """Return the default Kokoro voices for UI display."""
@@ -111,7 +199,13 @@ class Speech(GstSpeechPlayer):
 
     def get_addon_kokoro_voices(self):
         """Return the add-on Kokoro voices for UI display."""
-        return [v for v in self.kokoro_voices if v not in self.get_default_kokoro_voices()]
+        return [v for v in self.kokoro_voices
+                if v not in self.get_default_kokoro_voices()]
+
+    def get_current_language(self):
+        """Return the language name of the currently active voice."""
+        return language_config.get_language_display_label(
+            self.current_kokoro_voice)
 
     def make_pipeline(self):
         if self.pipeline is not None:
@@ -123,7 +217,7 @@ class Speech(GstSpeechPlayer):
         # ears play to the audio device - we hear the sound output from Kokoro / espeak
         # fakesink is used to draw the mouth movements
 
-        if KOKORO_AVAILABLE and self.kokoro_pipeline:
+        if KOKORO_AVAILABLE and self._kokoro_ready:
             # Build pipeline for Kokoro using appsrc
             # fakesink audio converted to S16LE 16KHz so it's backward compatable with the previous mouth drawing logic
             cmd = 'appsrc name=kokoro_src' \
@@ -144,7 +238,7 @@ class Speech(GstSpeechPlayer):
         self.pipeline = Gst.parse_launch(cmd)
         
         # Configure caps to ensure compatibility with numpy int16 processing
-        if not (KOKORO_AVAILABLE and self.kokoro_pipeline):
+        if not (KOKORO_AVAILABLE and self._kokoro_ready):
             # force a sample bit width to match our numpy code below
             caps = self.pipeline.get_by_name('caps')
             want = 'audio/x-raw,channels=(int)1,depth=(int)16'
@@ -290,7 +384,7 @@ class Speech(GstSpeechPlayer):
                 return False
 
             # For Kokoro, use time-based emission since position queries will fail while streaming in chunks
-            if KOKORO_AVAILABLE and self.kokoro_pipeline:
+            if KOKORO_AVAILABLE and self._kokoro_ready:
                 GLib.timeout_add(interval_ms, emit_next_chunk)
             else:
                 GLib.timeout_add(25, poke, data.pts)
@@ -325,21 +419,32 @@ class Speech(GstSpeechPlayer):
         bus.connect('message', gst_message_cb)
 
     def _stream_kokoro_audio(self, text, voice):
-        """Stream Kokoro audio chunks to the GStreamer pipeline"""
+        """Stream Kokoro audio chunks to the GStreamer pipeline.
+
+        Automatically selects the correct language pipeline based on the
+        voice prefix so that the right G2P (Grapheme-to-Phoneme) layer is
+        used for each language.
+        """
         try:
             # Getting the appsrc element
             appsrc = self.pipeline.get_by_name('kokoro_src')
             if not appsrc:
                 logger.error("Could not find kokoro_src element")
                 return
-            
+
             # Set caps for Kokoro audio
             caps = Gst.Caps.from_string(
                 "audio/x-raw,format=F32LE,layout=interleaved,rate=24000,channels=1"
             )
             appsrc.set_property("caps", caps)
 
-            audio_generator = self.kokoro_pipeline(text, voice=voice) # actual audio generation by kokoro
+            # Resolve the correct language pipeline for this voice
+            active_pipeline = self._resolve_pipeline_for_voice(voice)
+            if active_pipeline is None:
+                logger.error("No Kokoro pipeline available for voice %s", voice)
+                return
+
+            audio_generator = active_pipeline(text, voice=voice)  # actual audio generation by kokoro
 
             # Stream audio chunks
             for i, (gs, ps, audio_chunk) in enumerate(audio_generator):
@@ -366,8 +471,12 @@ class Speech(GstSpeechPlayer):
     def speak(self, status, text):
         self.make_pipeline()
         
-        if KOKORO_AVAILABLE and self.kokoro_pipeline:
-            logger.debug('Using Kokoro TTS: voice=%s text=%s' % (self.current_kokoro_voice, text))
+        if KOKORO_AVAILABLE and self._kokoro_ready:
+            lang_label = language_config.get_language_display_label(
+                self.current_kokoro_voice)
+            logger.debug(
+                'Using Kokoro TTS: voice=%s lang=%s text=%s',
+                self.current_kokoro_voice, lang_label, text)
             self.restart_sound_device()
             self._stream_kokoro_audio(text, self.current_kokoro_voice)
             
