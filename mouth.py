@@ -23,74 +23,101 @@
 
 # This code is a super-stripped down version of the waveform view from Measure
 
+import math
 import cairo
-
-from gi.repository import Gtk
-
+from gi.repository import Gtk, GLib
 from sugar3.graphics import style
 
 
 class Mouth(Gtk.DrawingArea):
     def __init__(self, audio, fill_color):
-
         Gtk.DrawingArea.__init__(self)
         self.set_size_request(-1, style.GRID_CELL_SIZE * 4)
 
         self.fill_color = fill_color
         self.audio = audio
-
         self.connect("draw", self.draw_cb)
 
     def stop(self):
-        self.audio.disconnect_all()
-        self.audio = None
-
-    def draw_cb(self, widget, cr):
-        return True
+        if self.audio:
+            self.audio.disconnect_all()
+            self.audio = None
 
 
 class PeakMouth(Mouth):
 
     def __init__(self, audio, fill_color):
-        Mouth.__init__(self, audio, fill_color)
+        super().__init__(audio, fill_color)
+
         audio.connect_peak(self.__peak_cb)
         audio.connect_idle(self.__idle_cb)
-        self.volume = 0
 
+        self.target_volume = 0
+        self.display_volume = 0
+        self.idle_phase = 0
+
+        # 60 FPS animation timer
+        GLib.timeout_add(16, self.__animate)
+
+    # -----------------------------
+    # Audio Callbacks
+    # -----------------------------
     def __peak_cb(self, me, volume):
-        self.volume = volume
-        self.queue_draw()
+        self.target_volume = min(volume, 30000)
 
     def __idle_cb(self, me):
-        self.volume = 0
-        self.queue_draw()
+        self.target_volume = 0
 
+    # -----------------------------
+    # Smooth animation loop
+    # -----------------------------
+    def __animate(self):
+        # Smooth interpolation
+        self.display_volume += (self.target_volume - self.display_volume) * 0.15
+
+        # Idle breathing
+        if self.target_volume == 0:
+            self.idle_phase += 0.05
+            self.display_volume = 2000 * abs(math.sin(self.idle_phase))
+
+        self.queue_draw()
+        return True
+
+    # -----------------------------
+    # Drawing
+    # -----------------------------
     def draw_cb(self, widget, cr):
         bounds = self.get_allocation()
-
-        # disable antialiasing
         cr.set_antialias(cairo.ANTIALIAS_NONE)
 
-        # background
+        # Background
         cr.set_source_rgba(*self.fill_color.get_rgba())
         cr.rectangle(0, 0, bounds.width, bounds.height)
         cr.fill()
 
-        # draw the mouth
-        volume = self.volume / 30000.
+        volume = self.display_volume / 30000.0
+
         mouthH = volume * bounds.height
-        mouthW = volume ** 2 * (bounds.width / 2.) + bounds.width / 2.
-        #        T
-        #  L           R
-        #        B
-        Lx, Ly = bounds.width // 2 - mouthW // 2, bounds.height // 2
-        Tx, Ty = bounds.width // 2, bounds.height // 2 - mouthH // 2
-        Rx, Ry = bounds.width // 2 + mouthW // 2, bounds.height // 2
-        Bx, By = bounds.width // 2, bounds.height // 2 + mouthH // 2
+        mouthW = volume ** 2 * (bounds.width / 2.0) + bounds.width / 2.0
+
+        cx = bounds.width // 2
+        cy = bounds.height // 2
+
+        Lx, Ly = cx - mouthW // 2, cy
+        Tx, Ty = cx, cy - mouthH // 2
+        Rx, Ry = cx + mouthW // 2, cy
+        Bx, By = cx, cy + mouthH // 2
+
         cr.set_line_width(min(bounds.height / 10.0, 10))
+
+        # Volume-based dynamic color
+        red_intensity = min(1.0, volume + 0.2)
+        cr.set_source_rgb(red_intensity, 0, 0)
+
         cr.move_to(Lx, Ly)
         cr.curve_to(Tx, Ty, Tx, Ty, Rx, Ry)
         cr.curve_to(Bx, By, Bx, By, Lx, Ly)
-        cr.set_source_rgb(0, 0, 0)
         cr.close_path()
         cr.stroke()
+
+        return False
