@@ -1,16 +1,35 @@
 # HablarConSara.activity
 # A simple hack to attach a chatterbot to speak activity
 # Copyright (C) 2008 Sebastian Silva Fundacion FuenteLibre
+# sebastian@fuentelibre.org
+#
+# Style and structure taken from Speak.activity Copyright (C) Joshua Minor
+#
+# HablarConSara.activity is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General Public
+# License as published by the Free Software Foundation, either
+# version 3 of the License, or (at your option) any later version.
+#
+# HablarConSara.activity is distributed in the hope that it will
+# be useful, but WITHOUT ANY WARRANTY; without even the implied
+# warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public
+# License along with HablarConSara.activity.  If not, see
+# <http://www.gnu.org/licenses/>.
 
 import time
-import logging
 from gettext import gettext as _
 
-from gi.repository import Gdk, GLib, Gio
+from gi.repository import Gdk
+from gi.repository import GLib
+from gi.repository import Gio
 from sugar3 import profile
 
 from aiml.Kernel import Kernel
 import voice
+import logging
 
 logger = logging.getLogger('speak')
 
