@@ -2,40 +2,36 @@
 # A simple front end to the espeak text-to-speech engine on the XO laptop
 # http://wiki.laptop.org/go/Speak
 #
-# Copyright (C) 2008  Joshua Minor
+# Copyright (C) 2008 Joshua Minor
 # This file is part of Speak.activity
 #
 # Parts of Speak.activity are based on code from Measure.activity
-# Copyright (C) 2007  Arjun Sarwal - arjun@laptop.org
+# Copyright (C) 2007 Arjun Sarwal - arjun@laptop.org
 #
 # New face features
-# Copyright (C) 2014  Walter Bender
-# Copyright (C) 2014  Sam Parkinson
+# Copyright (C) 2014 Walter Bender
+# Copyright (C) 2014 Sam Parkinson
 #
-#     Speak.activity is free software: you can redistribute it and/or modify
-#     it under the terms of the GNU General Public License as published by
-#     the Free Software Foundation, either version 3 of the License, or
-#     (at your option) any later version.
+# Speak.activity is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
-#     Speak.activity is distributed in the hope that it will be useful,
-#     but WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#     GNU General Public License for more details.
+# Speak.activity is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
 #
-#     You should have received a copy of the GNU General Public License
-#     along with Speak.activity.  If not, see <http://www.gnu.org/licenses/>.
-
-# Improved FaceSelector module
-# Enhancements:
-# - Undo support
-# - Safer input handling
-# - Cleaner math helpers
-# - Better contributor readability
+# You should have received a copy of the GNU General Public License
+# along with Speak.activity. If not, see <http://www.gnu.org/licenses/>.
 
 import math
 from gettext import gettext as _
 
-from gi.repository import Gtk, Gdk, GObject, GdkPixbuf
+from gi.repository import Gtk
+from gi.repository import Gdk
+from gi.repository import GObject
+from gi.repository import GdkPixbuf
 from sugar3.graphics.icon import Icon
 
 _POINT_CIRCUMFERENCE = 5
@@ -112,7 +108,7 @@ class FaceSelector(Gtk.VBox):
         self._label = Gtk.Label()
         self._add_widget(self._label)
 
-        # Undo button (NEW FEATURE)
+        # Undo button
         undo_btn = Gtk.Button(label=_("Undo"))
         undo_btn.connect("clicked", self._undo)
         self._add_widget(undo_btn)
@@ -129,9 +125,6 @@ class FaceSelector(Gtk.VBox):
 
         self._show_step(0)
 
-    # -----------------------
-    # Toolbar helper
-    # -----------------------
     def _add_widget(self, widget):
         t = Gtk.ToolItem()
         t.add(widget)
@@ -139,25 +132,23 @@ class FaceSelector(Gtk.VBox):
         self._toolbar.insert(t, -1)
         t.show()
 
-    # -----------------------
-    # Flow control
-    # -----------------------
     def _show_step(self, step):
         self._label.set_text(_STEPS[step])
         self._drawing.clear_line()
 
     def _undo(self, *_):
-        """NEW: Undo last selection."""
+        """Undo last selection."""
         if self._step > 0:
             self._step -= 1
-            self._step_lines.pop()
+            if self._step_lines:
+                self._step_lines.pop()
             self._drawing.limit_axis = None
             self._show_step(self._step)
 
     def _next(self, *_):
         sp, ep = self._drawing.get_line()
 
-        # Safety check (NEW)
+        # Safety check
         if not sp or not ep:
             return
 
@@ -172,9 +163,6 @@ class FaceSelector(Gtk.VBox):
         else:
             self._show_step(self._step)
 
-    # -----------------------
-    # Final processing
-    # -----------------------
     def _process_data(self):
         left = self._step_lines[0]
         right = self._step_lines[1]
@@ -225,9 +213,6 @@ class FaceSelectorDrawing(Gtk.DrawingArea):
         self.connect("button-release-event", self._release)
         self.connect("motion-notify-event", self._move)
 
-    # -----------------------
-    # Drawing
-    # -----------------------
     def _draw(self, widget, cr):
         alloc = widget.get_allocation()
 
@@ -260,15 +245,14 @@ class FaceSelectorDrawing(Gtk.DrawingArea):
 
         return False
 
-    # -----------------------
-    # Events
-    # -----------------------
     def _press(self, widget, event):
         self._start = (event.x, event.y)
         self._end = None
         self.queue_draw()
 
     def _release(self, widget, event):
+        if not self._start:
+            return
         sx, sy = self._start
         self._end = (
             sx if self.limit_axis == _LIMIT_HORIZONTAL else event.x,
@@ -286,9 +270,6 @@ class FaceSelectorDrawing(Gtk.DrawingArea):
         )
         self.queue_draw()
 
-    # -----------------------
-    # Utilities
-    # -----------------------
     def get_line(self):
         if not self._start or not self._end:
             return None, None
