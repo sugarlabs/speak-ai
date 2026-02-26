@@ -1,6 +1,6 @@
 # HablarConSara.activity
-# Modernized version for Sugar Labs contribution
-# Improvements: error handling, logging, safer memory handling
+# A simple hack to attach a chatterbot to speak activity
+# Copyright (C) 2008 Sebastian Silva Fundacion FuenteLibre
 
 import time
 import logging
