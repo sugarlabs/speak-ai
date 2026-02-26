@@ -1,55 +1,46 @@
-What is this?
-=============
+# Speak AI
 
-Speak is a voice synthesis activity for the Sugar desktop.
+Speak AI is a voice synthesis activity for the Sugar desktop.
 
-Speak shows a face that will talk what is typed, within reason.
+It shows a face that will speak what is typed, within reason.
 
-How to use?
-===========
+## How to use
 
-Speak is part of the Sugar desktop and is often included.  Please refer to;
+Speak AI is part of the Sugar desktop and is often included. Please refer to:
 
-* [How to Get Sugar on sugarlabs.org](https://sugarlabs.org/),
-* [How to use Sugar](https://help.sugarlabs.org/),
-* [Download Speak using Browse](https://v4.activities.sugarlabs.org/), search for `Speak`, then download, and;
-* [How to use Speak](https://help.sugarlabs.org/en/speak.html).
+* [How to Get Sugar on sugarlabs.org](https://sugarlabs.org/)
+* [How to use Sugar](https://help.sugarlabs.org/)
+* [Download Speak AI using Browse](https://v4.activities.sugarlabs.org/) — search for `Speak AI` and download
+* [How to use Speak AI](https://help.sugarlabs.org/en/speak.html)
 
-How to upgrade?
-===============
+## How to upgrade
 
-On Sugar desktop systems;
-* use [My Settings](https://help.sugarlabs.org/en/my_settings.html), [Software Update](https://help.sugarlabs.org/en/my_settings.html#software-update), or;
-* use Browse to open [v4.activities.sugarlabs.org](https://v4.activities.sugarlabs.org/), search for `Speak`, then download.
+On Sugar desktop systems:
 
-How to integrate?
-=================
+* Use [My Settings](https://help.sugarlabs.org/en/my_settings.html), [Software Update](https://help.sugarlabs.org/en/my_settings.html#software-update), or
+* Use Browse to open [v4.activities.sugarlabs.org](https://v4.activities.sugarlabs.org/), search for `Speak AI`, and download
 
-Speak depends on Python, [Sugar Toolkit for GTK+ 3](https://github.com/sugarlabs/sugar-toolkit-gtk3), GStreamer 1, GTK+ 3, and gst-plugins-espeak.
+## How to integrate
 
-Speak is started by [Sugar](https://github.com/sugarlabs/sugar).
+Speak AI depends on:
 
-Speak is [packaged by Fedora](https://src.fedoraproject.org/rpms/sugar-speak).  On Fedora systems;
+* Python
+* [Sugar Toolkit for GTK+ 3](https://github.com/sugarlabs/sugar-toolkit-gtk3)
+* GStreamer 1
+* GTK+ 3
+* gst-plugins-espeak
 
-```
-dnf install sugar-speak
-```
+Speak AI is started by [Sugar](https://github.com/sugarlabs/sugar).
 
-Speak is not packaged by Debian and Ubuntu distributions.  On Debian
-and Ubuntu systems dependencies include `gstreamer1.0-espeak`,
-`gir1.2-gstreamer-1.0`, and `gir1.2-gst-plugins-base-1.0`.
+On Fedora systems:
 
-Branch master
-=============
+On Debian/Ubuntu systems, dependencies include:
 
-The `master` branch targets an environment with latest stable release
-of [Sugar](https://github.com/sugarlabs/sugar), with dependencies on
-latest stable release of Fedora and Debian distributions.
+* `gstreamer1.0-espeak`
+* `gir1.2-gstreamer-1.0`
+* `gir1.2-gst-plugins-base-1.0`
 
-Branch not-gstreamer1
-=====================
+## Branches
 
-The `not-gstreamer1` branch is a backport of features and bug fixes
-from the `master` branch for ongoing maintenance of the activity on
-Fedora 18 systems which don't have well-functioning GStreamer 1
-packages.
+**master**: Targets latest stable Sugar with Fedora and Debian latest releases.  
+**not-gstreamer1**: Backport for older Fedora 18 systems without stable GStreamer 1.
