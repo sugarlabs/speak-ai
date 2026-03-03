@@ -5,8 +5,12 @@ import logging
 
 #TODO: Dont hard code these, need to see how sugar as a whole manages API Keys
 API_URL = "https://ai.sugarlabs.org/ask-llm-prompted"
-with open("API_KEY.txt", "r") as f:
-    API_KEY = f.read().strip()
+try:
+    with open("API_KEY.txt", "r") as f:
+        API_KEY = f.read().strip()
+except FileNotFoundError:
+    logging.error("API_KEY.txt not found. Please create it with your API key.")
+    API_KEY = None
 
 DEFAULT_PROMPT = "You are a friendly teacher named Jane who is 28 years old. You teach 10 year old children. Always give helpful, educational responses in simple words that children can understand. Keep your answers between 20-40 words. Be encouraging and enthusiastic but never use emojis(ever). If you notice spelling mistakes, gently correct them. Stay focused on the topic and give relevant answers."
 
