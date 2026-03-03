@@ -28,6 +28,14 @@ logger = logging.getLogger('speak')
 
 from sugar3.speech import GstSpeechPlayer
 
+LANGUAGE_CODES = {
+    'english': 'a',
+    'hindi': 'h',
+    'french': 'f',
+    'italian': 'i',
+    'portuguese': 'p',
+    }
+
 # Kokoro TTS imports
 try:
     from kokoro import KPipeline
@@ -56,7 +64,9 @@ class Speech(GstSpeechPlayer):
         # Initialize Kokoro pipeline if available
         self.kokoro_pipeline = None
         if KOKORO_AVAILABLE:
-            threading.Thread(target=self.setup_kokoro).start()
+            # threading.Thread(target=self.setup_kokoro).start()
+            threading.Thread(target=lambda: self.setup_kokoro('english')).start()
+
         
         # Predefined Kokoro voices for future GUI selection - TODO
         self.kokoro_voices = [
@@ -76,8 +86,33 @@ class Speech(GstSpeechPlayer):
         for cb in ['peak', 'wave', 'idle']:
             self._cb[cb] = None
 
-    def setup_kokoro(self):
-        self.kokoro_pipeline = KPipeline(lang_code='a')
+   
+    
+    # MY YOUR CHANGE (supports multiple languages):
+    
+
+    def setup_kokoro(self, language='english'):
+        """Initialize Kokoro TTS pipeline for the specified language.
+    
+        Args:
+            language: Language name (english, hindi, french, italian, portuguese)
+        """
+        lang_code = LANGUAGE_CODES.get(language, 'a')
+        self.kokoro_pipeline = KPipeline(lang_code=lang_code)
+        logger.debug(f"Kokoro initialized for language: {language} (code: {lang_code})")
+
+    def set_language(self, language='english'):
+        """Change the TTS language at runtime.
+    
+        Args:
+            language: Language name (english, hindi, french, italian, portuguese)
+        """
+    
+        if language not in LANGUAGE_CODES:
+            logger.warning(f"Unsupported language: {language}. Defaulting to English.")
+            language = 'english'
+        threading.Thread(target=lambda: self.setup_kokoro(language)).start()
+        logger.debug(f"Language changed to: {language}")
 
     def disconnect_all(self):
         for cb in ['peak', 'wave', 'idle']:
