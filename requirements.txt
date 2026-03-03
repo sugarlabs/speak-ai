@@ -6,3 +6,6 @@ numpy
 torch
 transformers
 requests
+
+soundfile
+kokoro
