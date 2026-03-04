@@ -122,13 +122,15 @@ def allVoices():
         _allVoices[voice.friendlyname] = voice
 
     en_name = _friendly_name('English')
-    if en_name not in _allVoices:
-        _allVoices[en_name] = _allVoices[_friendly_name('English (America)')]
+    en_us_name = _friendly_name('English (America)')
+    if en_name not in _allVoices and en_us_name in _allVoices:
+        _allVoices[en_name] = _allVoices[en_us_name]
         _allVoices[en_name].friendlyname = en_name
 
     es_name = _friendly_name('Spanish')
-    if es_name not in _allVoices:
-        _allVoices[es_name] = _allVoices[_friendly_name('Spanish (Latin America)')]
+    es_la_name = _friendly_name('Spanish (Latin America)')
+    if es_name not in _allVoices and es_la_name in _allVoices:
+        _allVoices[es_name] = _allVoices[es_la_name]
         _allVoices[es_name].friendlyname = es_name
 
     return _allVoices
@@ -174,6 +176,11 @@ def defaultVoice():
         if voice_name in voices:
             best = voices[voice_name]
             break
+        
+    if best is None:
+        if not voices:
+            return None
+        best = next(iter(voices.values()))
 
     es_name = _friendly_name('Spanish')
     es_la_name = _friendly_name('Spanish (Latin America)')
