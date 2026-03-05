@@ -29,12 +29,14 @@ logger = logging.getLogger('speak')
 from sugar3.speech import GstSpeechPlayer
 
 LANGUAGE_CODES = {
-    'english': 'a',
-    'hindi': 'h',
-    'french': 'f',
-    'italian': 'i',
-    'portuguese': 'p',
-    }
+    'en': 'a',
+    'hi': 'h',
+    'fr': 'f',
+    'it': 'i',
+    'pt': 'p',
+    'zh': 'z',
+    'ar': 'ar',
+}
 
 # Kokoro TTS imports
 try:
@@ -62,10 +64,11 @@ class Speech(GstSpeechPlayer):
         self.pipeline = None
         
         # Initialize Kokoro pipeline if available
-        self.kokoro_pipeline = None
+        self._pipeline_lock = threading.Lock()
         if KOKORO_AVAILABLE:
             # threading.Thread(target=self.setup_kokoro).start()
-            threading.Thread(target=lambda: self.setup_kokoro('english')).start()
+            threading.Thread(target=self.setup_kokoro, args=('en',)).start()
+
 
         
         # Predefined Kokoro voices for future GUI selection - TODO
@@ -91,11 +94,12 @@ class Speech(GstSpeechPlayer):
     # MY YOUR CHANGE (supports multiple languages):
     
 
-    def setup_kokoro(self, language='english'):
+    def setup_kokoro(self, language='en'):
         """Initialize Kokoro TTS pipeline for the specified language.
     
         Args:
-            language: Language name (english, hindi, french, italian, portuguese)
+            language: Language ISO code (en, hi, fr, it, pt, zh, ar)
+
         """
         lang_code = LANGUAGE_CODES.get(language, 'a')
         self.kokoro_pipeline = KPipeline(lang_code=lang_code)
@@ -105,13 +109,14 @@ class Speech(GstSpeechPlayer):
         """Change the TTS language at runtime.
     
         Args:
-            language: Language name (english, hindi, french, italian, portuguese)
+            language: Language ISO code (en, hi, fr, it, pt, zh, ar)
+
         """
     
         if language not in LANGUAGE_CODES:
             logger.warning(f"Unsupported language: {language}. Defaulting to English.")
-            language = 'english'
-        threading.Thread(target=lambda: self.setup_kokoro(language)).start()
+            language = 'en'
+        threading.Thread(target=self.setup_kokoro, args=(language,)).start()
         logger.debug(f"Language changed to: {language}")
 
     def disconnect_all(self):
