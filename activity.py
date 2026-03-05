@@ -318,6 +318,11 @@ class SpeakActivity(activity.Activity):
         self._make_kokoro()
         self._kokoro_button.connect('clicked', self._face_palette_cb)
         toolbox.toolbar.insert(self._kokoro_button, -1)
+        self._language_button = ToolButton('module-language')
+        self._language_button.set_tooltip(_('Choose language:'))
+        self._make_language_selector()
+        self._language_button.connect('clicked', self._face_palette_cb)
+        toolbox.toolbar.insert(self._language_button, -1)
 
         self._face_button = ToolbarButton(
             page=self._make_face_bar(),
@@ -795,6 +800,87 @@ class SpeakActivity(activity.Activity):
 
         facebar.show_all()
         return facebar
+    
+    def _language_changed_event_cb(self, widget, event, lang_code):
+    """Handle language selection change."""
+    current_lang = speech.get_speech().current_language
+
+    # Clear old highlight
+    if current_lang in self._language_evboxes:
+        self._language_evboxes[current_lang].modify_bg(
+            0, style.COLOR_BLACK.get_gdk_color())
+
+    # Highlight new selection
+    self._language_evboxes[lang_code].modify_bg(
+        0, style.COLOR_BUTTON_GREY.get_gdk_color())
+
+    # Actually change the language
+    speech.get_speech().set_language(lang_code)
+
+    # Update the indicator label
+    lang_name = speech.LANGUAGE_NAMES.get(lang_code, lang_code)
+    self._language_indicator.set_markup(
+        '<i>Current: %s</i>' % lang_name)
+
+    self.face.say_notification(_('Language changed to %s') % lang_name)
+    
+    def _make_language_selector(self):
+    self._language_evboxes = {}
+    self._language_box = Gtk.VBox()
+
+    # Heading
+    heading = Gtk.Label()
+    heading.set_markup('<b>CHOOSE LANGUAGE</b>')
+    heading.set_justify(Gtk.Justification.CENTER)
+    heading.set_alignment(0.5, 0)
+    self._language_box.pack_start(
+        heading, False, False, style.DEFAULT_PADDING)
+    heading.show()
+
+    # Current language indicator
+    self._language_indicator = Gtk.Label()
+    current_lang = speech.get_speech().current_language
+    current_name = speech.LANGUAGE_NAMES.get(current_lang, current_lang)
+    self._language_indicator.set_markup(
+        '<i>Current: %s</i>' % current_name)
+    self._language_box.pack_start(
+        self._language_indicator, False, False, style.DEFAULT_PADDING)
+    self._language_indicator.show()
+
+    # Language list
+    languages = speech.get_speech().get_available_languages()
+    for lang_code in languages:
+        lang_name = speech.LANGUAGE_NAMES.get(lang_code, lang_code)
+
+        label = Gtk.Label()
+        label.set_use_markup(True)
+        label.set_justify(Gtk.Justification.LEFT)
+        label.set_markup('<span size="large">%s</span>' % lang_name)
+
+        alignment = Gtk.Alignment.new(0, 0, 0, 0)
+        alignment.add(label)
+        label.show()
+
+        evbox = Gtk.EventBox()
+        self._language_evboxes[lang_code] = evbox
+        evbox.connect(
+            'button-press-event',
+            self._language_changed_event_cb,
+            lang_code)
+
+        if lang_code == current_lang:
+            evbox.modify_bg(0, style.COLOR_BUTTON_GREY.get_gdk_color())
+        else:
+            evbox.modify_bg(0, style.COLOR_BLACK.get_gdk_color())
+
+        evbox.add(alignment)
+        alignment.show()
+        self._language_box.pack_start(evbox, False, False, 0)
+        evbox.show()
+
+    self._language_palette = self._language_button.get_palette()
+    self._language_palette.set_content(self._language_box)
+    self._language_box.show_all()
 
     def _make_kokoro(self):
         self._kokoro_voice_evboxes = {}

@@ -38,6 +38,16 @@ LANGUAGE_CODES = {
     'ar': 'ar',
 }
 
+LANGUAGE_NAMES = {
+    'en': 'English',
+    'hi': 'Hindi',
+    'fr': 'French',
+    'it': 'Italian',
+    'pt': 'Portuguese',
+    'zh': 'Chinese (Mandarin)',
+    'ar': 'Arabic',
+}
+
 # Kokoro TTS imports
 try:
     from kokoro import KPipeline
@@ -65,6 +75,7 @@ class Speech(GstSpeechPlayer):
         
         # Initialize Kokoro pipeline if available
         self._pipeline_lock = threading.Lock()
+        self.current_language = 'en'
         if KOKORO_AVAILABLE:
             # threading.Thread(target=self.setup_kokoro).start()
             threading.Thread(target=self.setup_kokoro, args=('en',)).start()
@@ -91,7 +102,7 @@ class Speech(GstSpeechPlayer):
 
    
     
-    # MY YOUR CHANGE (supports multiple languages):
+    
     
 
     def setup_kokoro(self, language='en'):
@@ -141,6 +152,22 @@ class Speech(GstSpeechPlayer):
             logger.debug(f"Kokoro voice set to: {voice_name}")
         else:
             logger.warning(f"Invalid Kokoro voice: {voice_name}.")
+
+    def get_available_languages(self):
+        """Return list of supported language codes."""
+        return list(LANGUAGE_CODES.keys())
+    
+    def set_language(self, lang_code):
+        """Change the TTS language at runtime."""
+        if lang_code in LANGUAGE_CODES:
+            self.current_language = lang_code
+            threading.Thread(
+                target=self.setup_kokoro,
+                args=(lang_code,)
+            ).start()
+            logger.debug(f"Language changed to: {lang_code}")
+        else:
+            logger.warning(f"Unsupported language code: {lang_code}")
 
     def get_available_kokoro_voices(self):
         return self.kokoro_voices.copy()
