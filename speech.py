@@ -116,19 +116,19 @@ class Speech(GstSpeechPlayer):
         self.kokoro_pipeline = KPipeline(lang_code=lang_code)
         logger.debug(f"Kokoro initialized for language: {language} (code: {lang_code})")
 
-    def set_language(self, language='english'):
-        """Change the TTS language at runtime.
+    # def set_language(self, language='english'):
+    #     """Change the TTS language at runtime.
     
-        Args:
-            language: Language ISO code (en, hi, fr, it, pt, zh, ar)
+    #     Args:
+    #         language: Language ISO code (en, hi, fr, it, pt, zh, ar)
 
-        """
+    #     """
     
-        if language not in LANGUAGE_CODES:
-            logger.warning(f"Unsupported language: {language}. Defaulting to English.")
-            language = 'en'
-        threading.Thread(target=self.setup_kokoro, args=(language,)).start()
-        logger.debug(f"Language changed to: {language}")
+    #     if language not in LANGUAGE_CODES:
+    #         logger.warning(f"Unsupported language: {language}. Defaulting to English.")
+    #         language = 'en'
+    #     threading.Thread(target=self.setup_kokoro, args=(language,)).start()
+    #     logger.debug(f"Language changed to: {language}")
 
     def disconnect_all(self):
         for cb in ['peak', 'wave', 'idle']:
