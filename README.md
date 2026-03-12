@@ -53,3 +53,16 @@ The `not-gstreamer1` branch is a backport of features and bug fixes
 from the `master` branch for ongoing maintenance of the activity on
 Fedora 18 systems which don't have well-functioning GStreamer 1
 packages.
+
+### Model Setup (Kokoro-ONNX)
+
+This activity uses the lightweight Kokoro-ONNX backend for high-quality, multilingual text-to-speech. Because the model weights are large binary files (~200MB combined), they are not bundled directly in this repository.
+
+**Automated Download:**
+You do not need to download the models manually. Upon launching the activity for the first time, the backend will automatically download the required ONNX model (`kokoro-v1.0.fp16.onnx`) and the voice definitions (`voices-v1.0.bin`) from the official release repositories. 
+
+**Storage Location:**
+To adhere to Sugar OS sandboxing guidelines, these files are saved directly to your local writable activity root directory rather than the source code folder. You can find them here:
+`~/.sugar/default/org.sugarlabs.SpeakActivity/data/models/`
+
+*(Note: The initial download may take a few minutes depending on your internet connection. Subsequent launches will detect the cached models and boot instantly.)*

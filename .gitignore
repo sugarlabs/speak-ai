@@ -2,3 +2,4 @@ dist
 .0sugar
 *~
 *.pyc
+models/
