@@ -2,19 +2,43 @@ import requests
 import json
 import socket
 import logging
+import os
 
-#TODO: Dont hard code these, need to see how sugar as a whole manages API Keys
 API_URL = "https://ai.sugarlabs.org/ask-llm-prompted"
-try:
-    with open("API_KEY.txt", "r") as f:
-        API_KEY = f.read().strip()
-except OSError:
-    logging.error("Missing API_KEY.txt file.")
-    API_KEY = None
 
-DEFAULT_PROMPT = "You are a friendly teacher named Jane who is 28 years old. You teach 10 year old children. Always give helpful, educational responses in simple words that children can understand. Keep your answers between 20-40 words. Be encouraging and enthusiastic but never use emojis(ever). If you notice spelling mistakes, gently correct them. Stay focused on the topic and give relevant answers."
+
+def load_api_key():
+    """Fetch API key from environment variable or fallback to local file."""
+    # Prioritize environment variables for production security standards
+    key = os.environ.get("SUGAR_LLM_API_KEY")
+    if key:
+        return key.strip()
+
+    try:
+        with open("API_KEY.txt", "r") as f:
+            return f.read().strip()
+    except OSError:
+        logging.error("Missing API_KEY.txt file and SUGAR_LLM_API_KEY env variable.")
+        return None
+
+
+API_KEY = load_api_key()
+
+# Dictionary to store successful LLM responses to save battery and API costs
+_llm_cache = {}
+MAX_CACHE_SIZE = 50
+
+DEFAULT_PROMPT = (
+    "You are a friendly teacher named Jane who is 28 years old. "
+    "You teach 10 year old children. Always give helpful, educational responses "
+    "in simple words that children can understand. Keep your answers between 20-40 words. "
+    "Be encouraging and enthusiastic but never use emojis(ever). If you notice spelling mistakes, "
+    "gently correct them. Stay focused on the topic and give relevant answers."
+)
+
 
 def is_connected():
+    """Verify internet connectivity before attempting a network request."""
     try:
         socket.create_connection(("8.8.8.8", 53), timeout=5)
         logging.debug("Connection to 8.8.8.8 successful")
@@ -23,30 +47,37 @@ def is_connected():
         logging.error("Error: No internet connection. Please check your network.")
         return False
 
-def ask_llm_prompted(question, custom_prompt = DEFAULT_PROMPT, timeout=120, max_length=200):
+
+def ask_llm_prompted(
+    question, custom_prompt=DEFAULT_PROMPT, timeout=120, max_length=200
+):
+    """Sends a question to the LLM with optional caching for battery/cost efficiency."""
     if API_KEY is None:
-        logging.error("Missing API key file: API_KEY.txt")
+        logging.error("Missing API key: Ensure SUGAR_LLM_API_KEY is set.")
         return False
-    
+
     if not is_connected():
         return False
 
-    headers = {
-        "X-API-Key": API_KEY,
-        "Content-Type": "application/json"
-    }
-    
+    # Check cache to prevent redundant network requests and save battery
+    cache_key = f"{question}_{custom_prompt}_{max_length}"
+    if cache_key in _llm_cache:
+        logging.debug("Returning cached LLM response.")
+        return _llm_cache[cache_key]
+
+    headers = {"X-API-Key": API_KEY, "Content-Type": "application/json"}
+
     payload = {
         "question": question,
         "custom_prompt": custom_prompt,
         "max_length": max_length,
         "truncation": True,
-        "repetition_penalty": 1.2,  # Slightly higher to avoid repetition
-        "temperature": 0.3,         # Lower for more consistent responses
-        "top_p": 0.8,              # Slightly lower for better focus
-        "top_k": 20                # Much lower for more predictable responses
+        "repetition_penalty": 1.2,
+        "temperature": 0.3,
+        "top_p": 0.8,
+        "top_k": 20,
     }
-    
+
     try:
         response = requests.post(
             API_URL,
@@ -60,32 +91,38 @@ def ask_llm_prompted(question, custom_prompt = DEFAULT_PROMPT, timeout=120, max_
             return False
         response.raise_for_status()
 
-        # Parse the JSON response.
         data = response.json()
 
-        # Check if the 'answer' key is in the response and return it.
+        # Extract answer and update cache only on successful data retrieval
         if isinstance(data, dict) and "answer" in data:
-            return data['answer']
+            answer = data["answer"]
+
+            # Manage cache size (LRU) to remain memory-efficient on low-RAM hardware
+            if len(_llm_cache) >= MAX_CACHE_SIZE:
+                # Remove the oldest item in the dictionary
+                _llm_cache.pop(next(iter(_llm_cache)))
+
+            _llm_cache[cache_key] = answer
+            return answer
 
         else:
             return data
 
     except requests.exceptions.Timeout:
-        logging.error(f"The request timed out after {timeout} seconds. The server might be slow.")
+        logging.error(f"The request timed out after {timeout} seconds.")
     except requests.exceptions.RequestException as e:
         logging.error(f"An error occurred: {e}")
-        try:
-            logging.error(f"Response content: {response.text}")
-        except Exception:
-            pass
+        
     return False
 
+
 if __name__ == "__main__":
-    
     while True:
-        answer = ask_llm_prompted(question=input("Enter question to LLM"),custom_prompt=DEFAULT_PROMPT)
+        user_input = input("Enter question to LLM (or 'exit' to quit): ")
+        if user_input.lower() == "exit":
+            break
+        answer = ask_llm_prompted(question=user_input, custom_prompt=DEFAULT_PROMPT)
         if answer:
-            print(f'LLM ANS: {answer}')
-        
+            print(f"LLM ANS: {answer}")
         else:
-            print("Error, LLM did not respond")
+            print("Error: LLM did not respond.")
