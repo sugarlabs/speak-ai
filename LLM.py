@@ -2,15 +2,24 @@ import requests
 import json
 import socket
 import logging
+import os
 
-#TODO: Dont hard code these, need to see how sugar as a whole manages API Keys
 API_URL = "https://ai.sugarlabs.org/ask-llm-prompted"
-try:
-    with open("API_KEY.txt", "r") as f:
-        API_KEY = f.read().strip()
-except OSError:
-    logging.error("Missing API_KEY.txt file.")
-    API_KEY = None
+
+def load_api_key():
+    # Fetch API key from environment variable or fallback to local file
+    key = os.environ.get("SUGAR_LLM_API_KEY")
+    if key:
+        return key.strip()
+    
+    try:
+        with open("API_KEY.txt", "r") as f:
+            return f.read().strip()
+    except OSError:
+        logging.error("Missing API_KEY.txt file and SUGAR_LLM_API_KEY env variable.")
+        return None
+
+API_KEY = load_api_key()
 
 DEFAULT_PROMPT = "You are a friendly teacher named Jane who is 28 years old. You teach 10 year old children. Always give helpful, educational responses in simple words that children can understand. Keep your answers between 20-40 words. Be encouraging and enthusiastic but never use emojis(ever). If you notice spelling mistakes, gently correct them. Stay focused on the topic and give relevant answers."
 
