@@ -36,6 +36,32 @@ except ImportError:
     KOKORO_AVAILABLE = False
     logger.warning("Kokoro not available, falling back to espeak")
 
+KOKORO_LANG_MAP = {
+    'en': 'a',      # American English
+    'en_GB': 'b',   # British English
+    'es': 'e',      # Spanish
+    'fr': 'f',      # French
+    'hi': 'h',      # Hindi
+    'pt': 'p',      # Brazilian Portuguese (default)
+    'pt_BR': 'p',   # Brazilian Portuguese
+    'zh': 'z',      # Mandarin Chinese
+    'zh_CN': 'z',   # Mandarin Chinese (Simplified)
+}
+
+DEFAULT_LANG = 'en'
+
+DEFAULT_KOKORO_VOICE_BY_LANG = {
+    'en': 'af_heart',
+    'en_GB': 'bf_emma',
+    'es': 'ef_dora',
+    'fr': 'ff_siwis',
+    'hi': 'hf_alpha',
+    'pt': 'pf_dora',
+    'pt_BR': 'pf_dora',
+    'zh': 'zf_xiaoxiao',
+    'zh_CN': 'zf_xiaoxiao',
+}
+
 PITCH_MIN = 0
 PITCH_MAX = 200
 RATE_MIN = 0
@@ -52,7 +78,10 @@ class Speech(GstSpeechPlayer):
     def __init__(self):
         GstSpeechPlayer.__init__(self)
         self.pipeline = None
-        
+
+        # Logical language (locale-like; e.g. 'en', 'es', 'fr', 'hi')
+        self.current_lang = DEFAULT_LANG
+
         # Initialize Kokoro pipeline if available
         self.kokoro_pipeline = None
         if KOKORO_AVAILABLE:
@@ -70,14 +99,46 @@ class Speech(GstSpeechPlayer):
             'ff_siwis', 'hf_alpha', 'hf_beta', 'hm_omega', 'hm_psi',
             'if_sara', 'im_nicola', 'pf_dora', 'pm_alex', 'pm_santa'
         ]
-        self.current_kokoro_voice = 'af_heart'
+        self.current_kokoro_voice = DEFAULT_KOKORO_VOICE_BY_LANG.get(
+            self.current_lang, 'af_heart'
+        )
 
         self._cb = {}
         for cb in ['peak', 'wave', 'idle']:
             self._cb[cb] = None
 
+    def _get_kokoro_lang_code(self, locale_code):
+        """Return Kokoro lang_code for the given locale-like code."""
+        return KOKORO_LANG_MAP.get(locale_code, KOKORO_LANG_MAP[DEFAULT_LANG])
+
     def setup_kokoro(self):
-        self.kokoro_pipeline = KPipeline(lang_code='a')
+        """Initial Kokoro pipeline setup using the current language."""
+        lang_code = self._get_kokoro_lang_code(self.current_lang)
+        self.kokoro_pipeline = KPipeline(lang_code=lang_code)
+
+    def set_language(self, locale_code):
+        """
+        Update the logical language for TTS and reconfigure Kokoro.
+
+        Intended to be called from the Activity UI when the user selects a
+        language; we accept Sugar-style locale codes (e.g. 'es', 'fr',
+        'hi', 'pt_BR') and map them to Kokoro's internal lang_code.
+        """
+        self.current_lang = locale_code or DEFAULT_LANG
+
+        if KOKORO_AVAILABLE:
+            lang_code = self._get_kokoro_lang_code(self.current_lang)
+            try:
+                self.kokoro_pipeline = KPipeline(lang_code=lang_code)
+                logger.debug("Reconfigured Kokoro for lang=%s (code=%s)",
+                             self.current_lang, lang_code)
+            except Exception as e:
+                logger.error("Failed to reconfigure Kokoro for lang=%s: %s",
+                             self.current_lang, e)
+
+        default_voice = DEFAULT_KOKORO_VOICE_BY_LANG.get(self.current_lang)
+        if default_voice:
+            self.current_kokoro_voice = default_voice
 
     def disconnect_all(self):
         for cb in ['peak', 'wave', 'idle']:

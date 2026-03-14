@@ -313,11 +313,18 @@ class SpeakActivity(activity.Activity):
         toolbox.toolbar.insert(self._persona_button, -1)
 
 
-        self._kokoro_button = ToolButton('module-language')
-        self._kokoro_button.set_tooltip(_('Choose Kokoro voice:'))
-        self._make_kokoro()
-        self._kokoro_button.connect('clicked', self._face_palette_cb)
-        toolbox.toolbar.insert(self._kokoro_button, -1)
+        # Language selector for Kokoro-backed TTS.
+        self._lang_combo = Gtk.ComboBoxText()
+        self._lang_combo.append('en', _('English'))
+        self._lang_combo.append('es', _('Spanish'))
+        self._lang_combo.append('fr', _('French'))
+        self._lang_combo.append('hi', _('Hindi'))
+        self._lang_combo.set_active_id('en')
+        self._lang_combo.connect('changed', self._language_changed_cb)
+        lang_item = Gtk.ToolItem()
+        lang_item.add(self._lang_combo)
+        lang_item.show_all()
+        toolbox.toolbar.insert(lang_item, -1)
 
         self._face_button = ToolbarButton(
             page=self._make_face_bar(),
@@ -361,6 +368,10 @@ class SpeakActivity(activity.Activity):
         else:
             # we are creating the activity
             self.connect('shared', self._shared_cb)
+
+        # Apply initial language to speech backend.
+        self._apply_language_to_speech('en')
+
 
     def _toolbar_expanded(self):
         if self._activity_button.is_expanded():
@@ -419,6 +430,19 @@ class SpeakActivity(activity.Activity):
                                        % self.owner.props.nick)
         self._set_idle_phrase(speak=False)
         self._first_time = False
+
+    def _apply_language_to_speech(self, lang_id):
+        try:
+            speech.get_speech().set_language(lang_id)
+        except AttributeError:
+            # Older speech backends without multilingual support.
+            pass
+
+    def _language_changed_cb(self, combo):
+        lang_id = combo.get_active_id()
+        if not lang_id:
+            return
+        self._apply_language_to_speech(lang_id)
 
     def read_file(self, file_path):
         self._cfg = json.loads(open(file_path, 'r').read())
@@ -795,97 +819,6 @@ class SpeakActivity(activity.Activity):
 
         facebar.show_all()
         return facebar
-
-    def _make_kokoro(self):
-        self._kokoro_voice_evboxes = {}
-        self._kokoro_voice_box = Gtk.VBox()
-
-        # Add heading for DEFAULT VOICES
-        default_heading = Gtk.Label()
-        default_heading.set_markup('<b>DEFAULT VOICES</b>')
-        default_heading.set_justify(Gtk.Justification.CENTER)
-        default_heading.set_alignment(0.5, 0)
-        self._kokoro_voice_box.pack_start(default_heading, False, False, style.DEFAULT_PADDING)
-        default_heading.show()
-
-        # Arrange default voices in 3 columns
-        default_voices = speech.get_speech().get_default_kokoro_voices()
-        current_voice = speech.get_speech().current_kokoro_voice
-        default_vboxes = [Gtk.VBox(), Gtk.VBox(), Gtk.VBox()]
-        count = len(default_voices)
-        for i, voice_name in enumerate(default_voices):
-            label = Gtk.Label()
-            label.set_use_markup(True)
-            label.set_justify(Gtk.Justification.LEFT)
-            label.set_markup('<span size="large">%s</span>' % voice_name)
-            alignment = Gtk.Alignment.new(0, 0, 0, 0)
-            alignment.add(label)
-            label.show()
-            evbox = Gtk.EventBox()
-            self._kokoro_voice_evboxes[voice_name] = evbox
-            evbox.connect('button-press-event', self._kokoro_voice_changed_event_cb, voice_name)
-            if voice_name == current_voice:
-                evbox.modify_bg(0, style.COLOR_BUTTON_GREY.get_gdk_color())
-            evbox.add(alignment)
-            alignment.show()
-            if i < count // 3:
-                default_vboxes[0].pack_start(evbox, True, True, 0)
-            elif i < count // 3 * 2:
-                default_vboxes[1].pack_start(evbox, True, True, 0)
-            else:
-                default_vboxes[2].pack_start(evbox, True, True, 0)
-            evbox.show()
-        default_hbox = Gtk.HBox()
-        default_hbox.pack_start(default_vboxes[0], True, True, style.DEFAULT_PADDING)
-        default_hbox.pack_start(default_vboxes[1], True, True, style.DEFAULT_PADDING)
-        default_hbox.pack_start(default_vboxes[2], True, True, style.DEFAULT_PADDING)
-        self._kokoro_voice_box.pack_start(default_hbox, False, False, style.DEFAULT_PADDING)
-        default_hbox.show_all()
-
-        # Add heading for Add-on Voices
-        addon_heading = Gtk.Label()
-        addon_heading.set_markup('<b>ADD-ON VOICES</b>')
-        addon_heading.set_justify(Gtk.Justification.CENTER)
-        addon_heading.set_alignment(0.5, 0)
-        self._kokoro_voice_box.pack_start(addon_heading, False, False, style.DEFAULT_PADDING)
-        addon_heading.show()
-
-        # Arrange add-on voices in 3 columns
-        addon_voices = speech.get_speech().get_addon_kokoro_voices()
-        addon_vboxes = [Gtk.VBox(), Gtk.VBox(), Gtk.VBox()]
-        count = len(addon_voices)
-        for i, voice_name in enumerate(addon_voices):
-            label = Gtk.Label()
-            label.set_use_markup(True)
-            label.set_justify(Gtk.Justification.LEFT)
-            label.set_markup('<span size="large">%s</span>' % voice_name)
-            alignment = Gtk.Alignment.new(0, 0, 0, 0)
-            alignment.add(label)
-            label.show()
-            evbox = Gtk.EventBox()
-            self._kokoro_voice_evboxes[voice_name] = evbox
-            evbox.connect('button-press-event', self._kokoro_voice_changed_event_cb, voice_name)
-            if voice_name == current_voice:
-                evbox.modify_bg(0, style.COLOR_BUTTON_GREY.get_gdk_color())
-            evbox.add(alignment)
-            alignment.show()
-            if i < count // 3:
-                addon_vboxes[0].pack_start(evbox, True, True, 0)
-            elif i < count // 3 * 2:
-                addon_vboxes[1].pack_start(evbox, True, True, 0)
-            else:
-                addon_vboxes[2].pack_start(evbox, True, True, 0)
-            evbox.show()
-        addon_hbox = Gtk.HBox()
-        addon_hbox.pack_start(addon_vboxes[0], True, True, style.DEFAULT_PADDING)
-        addon_hbox.pack_start(addon_vboxes[1], True, True, style.DEFAULT_PADDING)
-        addon_hbox.pack_start(addon_vboxes[2], True, True, style.DEFAULT_PADDING)
-        self._kokoro_voice_box.pack_start(addon_hbox, False, False, style.DEFAULT_PADDING)
-        addon_hbox.show_all()
-
-        self._kokoro_palette = self._kokoro_button.get_palette()
-        self._kokoro_palette.set_content(self._kokoro_voice_box)
-        self._kokoro_voice_box.show_all()
 
     def _make_personas(self):
         self._persona_evboxes = {}
