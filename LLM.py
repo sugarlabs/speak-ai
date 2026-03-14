@@ -1,6 +1,5 @@
 import requests
 import json
-import socket
 import logging
 import os
 
@@ -37,17 +36,6 @@ DEFAULT_PROMPT = (
 )
 
 
-def is_connected():
-    """Verify internet connectivity before attempting a network request."""
-    try:
-        socket.create_connection(("8.8.8.8", 53), timeout=5)
-        logging.debug("Connection to 8.8.8.8 successful")
-        return True
-    except OSError:
-        logging.error("Error: No internet connection. Please check your network.")
-        return False
-
-
 def ask_llm_prompted(
     question, custom_prompt=DEFAULT_PROMPT, timeout=120, max_length=200
 ):
@@ -56,15 +44,13 @@ def ask_llm_prompted(
         logging.error("Missing API key: Ensure SUGAR_LLM_API_KEY is set.")
         return False
 
-    if not is_connected():
-        return False
-
     # Check cache to prevent redundant network requests and save battery
     cache_key = f"{question}_{custom_prompt}_{max_length}"
     if cache_key in _llm_cache:
         logging.debug("Returning cached LLM response.")
-        return _llm_cache[cache_key]
-
+        answer = _llm_cache.pop(cache_key)
+        _llm_cache[cache_key] = answer
+        return answer
     headers = {"X-API-Key": API_KEY, "Content-Type": "application/json"}
 
     payload = {
@@ -112,7 +98,7 @@ def ask_llm_prompted(
         logging.error(f"The request timed out after {timeout} seconds.")
     except requests.exceptions.RequestException as e:
         logging.error(f"An error occurred: {e}")
-        
+
     return False
 
 
