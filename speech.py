@@ -49,8 +49,6 @@ SUGAR_TO_KOKORO = {"en": "a", "es": "e", "fr": "f", "hi": "h", "pt": "p"}
 
 class Speech(GstSpeechPlayer):
     __gsignals__ = {
-        "peak": (GObject.SIGNAL_RUN_FIRST, None, [GObject.TYPE_PYOBJECT]),
-        "wave": (GObject.SIGNAL_RUN_FIRST, None, [GObject.TYPE_PYOBJECT]),
         "idle": (GObject.SIGNAL_RUN_FIRST, None, []),
     }
 
@@ -130,16 +128,8 @@ class Speech(GstSpeechPlayer):
         for cb in ["peak", "wave", "idle"]:
             self._cb[cb] = None
 
-
-def setup_kokoro(self):
-    import os
-
-    # Detect system language and fallback to 'a' (English) if unsupported
-    lang = os.environ.get("LANG", "en").split("_")[0]
-    kokoro_lang = SUGAR_TO_KOKORO.get(lang, "a")
-
-    logger.debug(f"Initializing Kokoro with language: {kokoro_lang}")
-    self.kokoro_pipeline = KPipeline(lang_code=kokoro_lang)
+    def setup_kokoro(self):
+        self.kokoro_pipeline = KPipeline(lang_code="a")
 
     def disconnect_all(self):
         for cb in ["peak", "wave", "idle"]:
