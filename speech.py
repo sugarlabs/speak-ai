@@ -82,6 +82,8 @@ class Speech(GstSpeechPlayer):
         # Logical language (locale-like; e.g. 'en', 'es', 'fr', 'hi')
         self.current_lang = DEFAULT_LANG
 
+        self._kokoro_lock = threading.Lock()
+
         # Initialize Kokoro pipeline if available
         self.kokoro_pipeline = None
         if KOKORO_AVAILABLE:
@@ -114,7 +116,8 @@ class Speech(GstSpeechPlayer):
     def setup_kokoro(self):
         """Initial Kokoro pipeline setup using the current language."""
         lang_code = self._get_kokoro_lang_code(self.current_lang)
-        self.kokoro_pipeline = KPipeline(lang_code=lang_code)
+        with self._kokoro_lock:
+            self.kokoro_pipeline = KPipeline(lang_code=lang_code)
 
     def set_language(self, locale_code):
         """
@@ -129,16 +132,18 @@ class Speech(GstSpeechPlayer):
         if KOKORO_AVAILABLE:
             lang_code = self._get_kokoro_lang_code(self.current_lang)
             try:
-                self.kokoro_pipeline = KPipeline(lang_code=lang_code)
+                with self._kokoro_lock:
+                    self.kokoro_pipeline = KPipeline(lang_code=lang_code)
                 logger.debug("Reconfigured Kokoro for lang=%s (code=%s)",
                              self.current_lang, lang_code)
             except Exception as e:
                 logger.error("Failed to reconfigure Kokoro for lang=%s: %s",
                              self.current_lang, e)
 
-        default_voice = DEFAULT_KOKORO_VOICE_BY_LANG.get(self.current_lang)
-        if default_voice:
-            self.current_kokoro_voice = default_voice
+        self.current_kokoro_voice = DEFAULT_KOKORO_VOICE_BY_LANG.get(
+            self.current_lang,
+            DEFAULT_KOKORO_VOICE_BY_LANG[DEFAULT_LANG],
+        )
 
     def disconnect_all(self):
         for cb in ['peak', 'wave', 'idle']:
@@ -426,30 +431,35 @@ class Speech(GstSpeechPlayer):
 
     def speak(self, status, text):
         self.make_pipeline()
-        
-        if KOKORO_AVAILABLE and self.kokoro_pipeline:
-            logger.debug('Using Kokoro TTS: voice=%s text=%s' % (self.current_kokoro_voice, text))
+
+        use_kokoro = False
+        if KOKORO_AVAILABLE:
+            with self._kokoro_lock:
+                if self.kokoro_pipeline:
+                    use_kokoro = True
+
+        if use_kokoro:
+            logger.debug('Using Kokoro TTS: voice=%s text=%s',
+                         self.current_kokoro_voice, text)
             self.restart_sound_device()
             self._stream_kokoro_audio(text, self.current_kokoro_voice)
-            
-        else:
-            # Fallback to espeak
-            src = self.pipeline.get_by_name('espeak')
-            
-            pitch = int(status.pitch) - 100
-            rate = int(status.rate) - 100
+            return
 
-            logger.debug('Using espeak fallback: pitch=%d rate=%d voice=%s text=%s' % (pitch, rate,
-                                                                status.voice.name,
-                                                                text))
+        src = self.pipeline.get_by_name('espeak')
 
-            src.props.pitch = pitch
-            src.props.rate = rate
-            src.props.voice = status.voice.name
-            src.props.track = 1
-            src.props.text = text
+        pitch = int(status.pitch) - 100
+        rate = int(status.rate) - 100
 
-            self.restart_sound_device()
+        logger.debug('Using espeak fallback: pitch=%d rate=%d voice=%s text=%s',
+                     pitch, rate, status.voice.name, text)
+
+        src.props.pitch = pitch
+        src.props.rate = rate
+        src.props.voice = status.voice.name
+        src.props.track = 1
+        src.props.text = text
+
+        self.restart_sound_device()
 
 
 _speech = None

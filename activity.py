@@ -882,7 +882,10 @@ class SpeakActivity(activity.Activity):
         self._persona_box.show_all()
         
     def _kokoro_voice_changed_event_cb(self, widget, event, voice_name):
-        # Show info label(Indication of voice changing) upon click
+        if not hasattr(self, '_kokoro_voice_box') or \
+                not hasattr(self, '_kokoro_voice_evboxes'):
+            return
+
         info_label = Gtk.Label()
         info_label.set_markup('<span foreground="blue" size="large">%s</span>' % _('Please wait...'))
         self._kokoro_voice_box.pack_start(info_label, False, False, style.DEFAULT_PADDING)
@@ -920,11 +923,13 @@ class SpeakActivity(activity.Activity):
             if is_local:
                 message = _('Changing voice, please wait')
                 info_label.set_markup('<span foreground="green" size="large">%s</span>' % message)
-                # Now update UI for voice selection
-                for old_name, evbox in self._kokoro_voice_evboxes.items():
-                    if old_name == speech.get_speech().current_kokoro_voice:
-                        evbox.modify_bg(0, style.COLOR_BLACK.get_gdk_color())
-                self._kokoro_voice_evboxes[voice_name].modify_bg(0, style.COLOR_BUTTON_GREY.get_gdk_color())
+                if self._kokoro_voice_evboxes:
+                    for old_name, evbox in self._kokoro_voice_evboxes.items():
+                        if old_name == speech.get_speech().current_kokoro_voice:
+                            evbox.modify_bg(0, style.COLOR_BLACK.get_gdk_color())
+                    if voice_name in self._kokoro_voice_evboxes:
+                        self._kokoro_voice_evboxes[voice_name].modify_bg(
+                            0, style.COLOR_BUTTON_GREY.get_gdk_color())
 
                 # Actually set the voice (may trigger download from Hugging Face Hub)
                 speech.get_speech().set_kokoro_voice(voice_name)
@@ -934,7 +939,8 @@ class SpeakActivity(activity.Activity):
                 Gtk.main_iteration()
 
             def _remove_info_label():
-                self._kokoro_voice_box.remove(info_label)
+                if hasattr(self, '_kokoro_voice_box'):
+                    self._kokoro_voice_box.remove(info_label)
             GLib.timeout_add(3000, _remove_info_label)
 
         GLib.idle_add(async_check_and_update)
@@ -954,22 +960,18 @@ class SpeakActivity(activity.Activity):
         # Set current persona
         self._current_persona = persona_name
 
-        # Get the persona's voice and set it (using Kokoro voices)
         persona_voice_name = self._personas[persona_name]['voice']
 
-        # Update Kokoro voice selection visually
         current_kokoro_voice = speech.get_speech().current_kokoro_voice
-        if self._kokoro_voice_evboxes.get(persona_voice_name, False):
-            # Clear old Kokoro voice selection
+        if hasattr(self, '_kokoro_voice_evboxes') and \
+                self._kokoro_voice_evboxes.get(persona_voice_name, False):
             if self._kokoro_voice_evboxes.get(current_kokoro_voice, False):
                 self._kokoro_voice_evboxes[current_kokoro_voice].modify_bg(
                     0, style.COLOR_BLACK.get_gdk_color())
 
-            # Highlight new Kokoro voice selection
             self._kokoro_voice_evboxes[persona_voice_name].modify_bg(
                 0, style.COLOR_BUTTON_GREY.get_gdk_color())
-            
-            # Set the Kokoro voice
+
             speech.get_speech().set_kokoro_voice(persona_voice_name)
 
         self.face.say_notification(_('Persona changed to %s') % persona_name)
