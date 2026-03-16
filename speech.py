@@ -19,6 +19,9 @@
 import numpy
 import threading
 
+from collections import OrderedDict
+import hashlib
+
 from gi.repository import Gst
 from gi.repository import GLib
 from gi.repository import GObject
@@ -75,6 +78,9 @@ class Speech(GstSpeechPlayer):
         
         # Initialize Kokoro pipeline if available
         self._pipeline_lock = threading.Lock()
+        self._audio_cache = OrderedDict()
+        self._cache_lock = threading.Lock()
+        self._max_cache_size = 20
         self.current_language = 'en'
         if KOKORO_AVAILABLE:
             # threading.Thread(target=self.setup_kokoro).start()
@@ -156,6 +162,43 @@ class Speech(GstSpeechPlayer):
     def get_available_languages(self):
         """Return list of supported language codes."""
         return list(LANGUAGE_CODES.keys())
+    def _get_cache_key(self, text, voice):
+        """Generate a unique cache key for text + voice combination."""
+        raw = f"{text}:{voice}"
+        return hashlib.md5(raw.encode()).hexdigest()
+    
+    def get_cached_audio(self, text, voice):
+        """Return cached audio for text+voice if available, else None."""
+        key = self._get_cache_key(text, voice)
+        with self._cache_lock:
+            if key in self._audio_cache:
+                self._audio_cache.move_to_end(key)
+                logger.debug(f"Cache HIT for: {text[:30]}")
+                return self._audio_cache[key]
+        logger.debug(f"Cache MISS for: {text[:30]}")
+        return None
+    
+    def cache_audio(self, text, voice, audio_chunks):
+        """Store generated audio in cache with LRU eviction."""
+        key = self._get_cache_key(text, voice)
+        with self._cache_lock:
+            if key in self._audio_cache:
+                self._audio_cache.move_to_end(key)
+            else:
+                if len(self._audio_cache) >= self._max_cache_size:
+                    evicted = self._audio_cache.popitem(last=False)
+                    logger.debug(f"Cache evicted oldest entry")
+                self._audio_cache[key] = audio_chunks
+                logger.debug(f"Cached audio for: {text[:30]}")
+
+    def clear_cache(self):
+        """Clear all cached audio."""
+        with self._cache_lock:
+            self._audio_cache.clear()
+        logger.debug("Audio cache cleared")
+    
+
+    
     
     def set_language(self, lang_code):
         """Change the TTS language at runtime."""
@@ -426,6 +469,56 @@ class Speech(GstSpeechPlayer):
             
         except Exception as e:
             # Signalling EOS here as well, but I'm adding error to logs
+            logger.error(f"Error in Kokoro audio streaming: {e}")
+            if appsrc:
+                appsrc.emit("end-of-stream")
+    def _stream_kokoro_audio(self, text, voice):
+        """Stream Kokoro audio chunks to the GStreamer pipeline.
+        Uses cache for repeated phrases to avoid regenerating audio.
+        """
+        try:
+            appsrc = self.pipeline.get_by_name('kokoro_src')
+            if not appsrc:
+                logger.error("Could not find kokoro_src element")
+                return
+
+            caps = Gst.Caps.from_string(
+            "audio/x-raw,format=F32LE,layout=interleaved,rate=24000,channels=1"
+            )
+            appsrc.set_property("caps", caps)
+
+            # Check cache first
+            cached = self.get_cached_audio(text, voice)
+            if cached:
+                logger.debug("Serving audio from cache")
+                for data_bytes in cached:
+                    buf = Gst.Buffer.new_wrapped(data_bytes)
+                    ret = appsrc.emit("push-buffer", buf)
+                    if ret != Gst.FlowReturn.OK:
+                        logger.error("Error pushing cached buffer")
+                        break
+                appsrc.emit("end-of-stream")
+                return
+
+            # Not in cache — generate with Kokoro and cache it
+            audio_generator = self.kokoro_pipeline(text, voice=voice)
+            chunks_to_cache = []
+
+            for i, (gs, ps, audio_chunk) in enumerate(audio_generator):
+                data_bytes = audio_chunk.numpy().tobytes()
+                chunks_to_cache.append(data_bytes)
+
+                buf = Gst.Buffer.new_wrapped(data_bytes)
+                ret = appsrc.emit("push-buffer", buf)
+                if ret != Gst.FlowReturn.OK:
+                    logger.error(f"Error pushing buffer {i} to GStreamer")
+                    break
+
+            # Save to cache for next time
+            self.cache_audio(text, voice, chunks_to_cache)
+            appsrc.emit("end-of-stream")
+
+        except Exception as e:
             logger.error(f"Error in Kokoro audio streaming: {e}")
             if appsrc:
                 appsrc.emit("end-of-stream")
