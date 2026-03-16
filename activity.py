@@ -227,6 +227,7 @@ class SpeakActivity(activity.Activity):
             self._entry.set_size_request(-1, style.GRID_CELL_SIZE)
             self._entry_box.pack_start(self._entrycombo, True, True, 0)
         self._entry.set_editable(True)
+        self._entry.set_placeholder_text(_("Type something to speak…"))
         self._entry.connect('activate', self._entry_activate_cb)
         self._entry.connect('key-press-event', self._entry_key_press_cb)
         self._entry.modify_font(Pango.FontDescription('sans bold 24'))
