@@ -22,6 +22,8 @@ import threading
 from collections import OrderedDict
 import hashlib
 
+from spellchecker import SpellChecker
+
 from gi.repository import Gst
 from gi.repository import GLib
 from gi.repository import GObject
@@ -196,7 +198,55 @@ class Speech(GstSpeechPlayer):
         with self._cache_lock:
             self._audio_cache.clear()
         logger.debug("Audio cache cleared")
-    
+
+    def correct_spelling(self, text, lang_code='en'):
+        """Correct invented spellings before TTS processing.
+        
+        Corrects phonetic spellings common in child users
+        without modifying the original input — only for TTS.
+        
+        Args:
+            text: Input text to correct
+            lang_code: ISO language code (en, fr, es, pt, it)
+        
+        Returns:
+            Corrected text for TTS pronunciation
+        """
+        # Languages supported by pyspellchecker
+        SUPPORTED_LANGS = {
+            'en': 'en',
+            'fr': 'fr',
+            'es': 'es',
+            'pt': 'pt',
+            'it': 'it',
+        }
+        
+        if lang_code not in SUPPORTED_LANGS:
+            logger.debug(f"Spell correction not available for {lang_code}, skipping")
+            return text
+        
+        try:
+            spell = SpellChecker(language=SUPPORTED_LANGS[lang_code])
+            words = text.split()
+            corrected_words = []
+            
+            for word in words:
+                correction = spell.correction(word)
+                if correction and correction != word:
+                    logger.debug(f"Spelling corrected: {word} -> {correction}")
+                    corrected_words.append(correction)
+                else:
+                    corrected_words.append(word)
+            
+            corrected = ' '.join(corrected_words)
+            if corrected != text:
+                logger.debug(f"Full correction: '{text}' -> '{corrected}'")
+            return corrected
+        
+        except Exception as e:
+            logger.warning(f"Spell correction failed: {e}")
+            return text
+        
 
     
     
@@ -526,10 +576,13 @@ class Speech(GstSpeechPlayer):
     def speak(self, status, text):
         self.make_pipeline()
         
+    
+
         if KOKORO_AVAILABLE and self.kokoro_pipeline:
-            logger.debug('Using Kokoro TTS: voice=%s text=%s' % (self.current_kokoro_voice, text))
+            corrected_text = self.correct_spelling(text, self.current_language)
+            logger.debug('Using Kokoro TTS: voice=%s text=%s' % (self.current_kokoro_voice, corrected_text))
             self.restart_sound_device()
-            self._stream_kokoro_audio(text, self.current_kokoro_voice)
+            self._stream_kokoro_audio(corrected_text, self.current_kokoro_voice)
             
         else:
             # Fallback to espeak
