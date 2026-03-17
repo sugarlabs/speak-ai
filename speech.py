@@ -18,6 +18,7 @@
 
 import numpy
 import threading
+from threading import Lock
 
 from gi.repository import Gst
 from gi.repository import GLib
@@ -52,18 +53,23 @@ class Speech(GstSpeechPlayer):
     def __init__(self):
         GstSpeechPlayer.__init__(self)
         self.pipeline = None
-        
+
+        # Lock to guard kokoro_pipeline across threads (fix for race condition)
+        self._kokoro_lock = Lock()
+
         # Initialize Kokoro pipeline if available
         self.kokoro_pipeline = None
         if KOKORO_AVAILABLE:
-            threading.Thread(target=self.setup_kokoro).start()
-        
+            t = threading.Thread(target=self.setup_kokoro, daemon=True)
+            t.start()
+
         # Predefined Kokoro voices for future GUI selection - TODO
+        # Note: duplicates removed (am_adam, am_echo, am_eric, am_fenrir were listed twice)
         self.kokoro_voices = [
             'af_heart', 'af_alloy', 'af_aoede', 'af_bella', 'af_jessica', 'af_kore', 'af_nicole',
-            'af_nova', 'af_river', 'af_sarah', 'af_sky','am_adam', 'am_echo', 'am_eric', 'am_fenrir',
-            'am_adam', 'am_echo', 'am_eric', 'am_fenrir', 'am_liam', 'am_michael', 'am_onyx',
-            'am_puck', 'am_santa', 'bf_alice', 'bf_emma', 'bf_isabella', 'bf_lily', 'bm_daniel',
+            'af_nova', 'af_river', 'af_sarah', 'af_sky', 'am_adam', 'am_echo', 'am_eric', 'am_fenrir',
+            'am_liam', 'am_michael', 'am_onyx', 'am_puck', 'am_santa',
+            'bf_alice', 'bf_emma', 'bf_isabella', 'bf_lily', 'bm_daniel',
             'bm_fable', 'bm_george', 'bm_lewis', 'jf_alpha', 'jf_gongitsune', 'jf_nezumi', 'jf_tebukuro',
             'jm_kumo', 'zf_xiaobei', 'zf_xiaoni', 'zf_xiaoxiao', 'zf_xiaoyi', 'zm_yunjian',
             'zm_yunxi', 'zm_yunxia', 'zm_yunyang', 'ef_dora', 'em_alex', 'em_santa',
@@ -77,7 +83,9 @@ class Speech(GstSpeechPlayer):
             self._cb[cb] = None
 
     def setup_kokoro(self):
-        self.kokoro_pipeline = KPipeline(lang_code='a')
+        pipeline = KPipeline(lang_code='a')
+        with self._kokoro_lock:
+            self.kokoro_pipeline = pipeline
 
     def disconnect_all(self):
         for cb in ['peak', 'wave', 'idle']:
@@ -123,7 +131,9 @@ class Speech(GstSpeechPlayer):
         # ears play to the audio device - we hear the sound output from Kokoro / espeak
         # fakesink is used to draw the mouth movements
 
-        if KOKORO_AVAILABLE and self.kokoro_pipeline:
+        with self._kokoro_lock:
+            kokoro_ready = KOKORO_AVAILABLE and self.kokoro_pipeline is not None
+        if kokoro_ready:
             # Build pipeline for Kokoro using appsrc
             # fakesink audio converted to S16LE 16KHz so it's backward compatable with the previous mouth drawing logic
             cmd = 'appsrc name=kokoro_src' \
@@ -326,47 +336,54 @@ class Speech(GstSpeechPlayer):
 
     def _stream_kokoro_audio(self, text, voice):
         """Stream Kokoro audio chunks to the GStreamer pipeline"""
+        # Initialize appsrc to None so the except block can always safely reference it
+        appsrc = None
         try:
             # Getting the appsrc element
             appsrc = self.pipeline.get_by_name('kokoro_src')
             if not appsrc:
                 logger.error("Could not find kokoro_src element")
                 return
-            
+
             # Set caps for Kokoro audio
             caps = Gst.Caps.from_string(
                 "audio/x-raw,format=F32LE,layout=interleaved,rate=24000,channels=1"
             )
             appsrc.set_property("caps", caps)
 
-            audio_generator = self.kokoro_pipeline(text, voice=voice) # actual audio generation by kokoro
+            with self._kokoro_lock:
+                kokoro_pipeline = self.kokoro_pipeline
+
+            audio_generator = kokoro_pipeline(text, voice=voice)  # actual audio generation by kokoro
 
             # Stream audio chunks
             for i, (gs, ps, audio_chunk) in enumerate(audio_generator):
                 # Convert tensor to numpy array then to bytes
                 data_bytes = audio_chunk.numpy().tobytes()
-                
+
                 # Create GStreamer buffer
                 buf = Gst.Buffer.new_wrapped(data_bytes)
-                
+
                 # Push buffer to appsrc
                 ret = appsrc.emit("push-buffer", buf)
                 if ret != Gst.FlowReturn.OK:
                     logger.error(f"Error pushing buffer {i} to GStreamer")
                     break
 
-            appsrc.emit("end-of-stream") # Signal EOS
-            
+            appsrc.emit("end-of-stream")  # Signal EOS
+
         except Exception as e:
-            # Signalling EOS here as well, but I'm adding error to logs
+            # Signalling EOS here as well, but adding error to logs
             logger.error(f"Error in Kokoro audio streaming: {e}")
-            if appsrc:
+            if appsrc is not None:
                 appsrc.emit("end-of-stream")
 
     def speak(self, status, text):
         self.make_pipeline()
         
-        if KOKORO_AVAILABLE and self.kokoro_pipeline:
+        with self._kokoro_lock:
+            kokoro_ready = KOKORO_AVAILABLE and self.kokoro_pipeline is not None
+        if kokoro_ready:
             logger.debug('Using Kokoro TTS: voice=%s text=%s' % (self.current_kokoro_voice, text))
             self.restart_sound_device()
             self._stream_kokoro_audio(text, self.current_kokoro_voice)
