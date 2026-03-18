@@ -326,6 +326,7 @@ class Speech(GstSpeechPlayer):
 
     def _stream_kokoro_audio(self, text, voice):
         """Stream Kokoro audio chunks to the GStreamer pipeline"""
+        appsrc = None
         try:
             # Getting the appsrc element
             appsrc = self.pipeline.get_by_name('kokoro_src')
@@ -357,9 +358,9 @@ class Speech(GstSpeechPlayer):
 
             appsrc.emit("end-of-stream") # Signal EOS
             
-        except Exception as e:
+        except Exception:
             # Signalling EOS here as well, but I'm adding error to logs
-            logger.error(f"Error in Kokoro audio streaming: {e}")
+            logger.exception("Error in Kokoro audio streaming")
             if appsrc:
                 appsrc.emit("end-of-stream")
 
