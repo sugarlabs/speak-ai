@@ -61,7 +61,7 @@ class Speech(GstSpeechPlayer):
         # Predefined Kokoro voices for future GUI selection - TODO
         self.kokoro_voices = [
             'af_heart', 'af_alloy', 'af_aoede', 'af_bella', 'af_jessica', 'af_kore', 'af_nicole',
-            'af_nova', 'af_river', 'af_sarah', 'af_sky','am_adam', 'am_echo', 'am_eric', 'am_fenrir',
+            'af_nova', 'af_river', 'af_sarah', 'af_sky', 'am_adam', 'am_echo', 'am_eric', 'am_fenrir',
             'am_adam', 'am_echo', 'am_eric', 'am_fenrir', 'am_liam', 'am_michael', 'am_onyx',
             'am_puck', 'am_santa', 'bf_alice', 'bf_emma', 'bf_isabella', 'bf_lily', 'bm_daniel',
             'bm_fable', 'bm_george', 'bm_lewis', 'jf_alpha', 'jf_gongitsune', 'jf_nezumi', 'jf_tebukuro',
@@ -70,11 +70,51 @@ class Speech(GstSpeechPlayer):
             'ff_siwis', 'hf_alpha', 'hf_beta', 'hm_omega', 'hm_psi',
             'if_sara', 'im_nicola', 'pf_dora', 'pm_alex', 'pm_santa'
         ]
+    
         self.current_kokoro_voice = 'af_heart'
-
+    
         self._cb = {}
         for cb in ['peak', 'wave', 'idle']:
             self._cb[cb] = None
+    
+    
+    def group_kokoro_voices(self):
+        groups = {}
+    
+        mapping = {
+            'af': 'American Female',
+            'am': 'American Male',
+            'bf': 'British Female',
+            'bm': 'British Male',
+            'jf': 'Japanese Female',
+            'jm': 'Japanese Male',
+            'zf': 'Chinese Female',
+            'zm': 'Chinese Male',
+            'ef': 'European Female',
+            'em': 'European Male',
+            'ff': 'French Female',
+            'hf': 'Hindi Female',
+            'hm': 'Hindi Male',
+            'if': 'Indian Female',
+            'im': 'Indian Male',
+            'pf': 'Portuguese Female',
+            'pm': 'Portuguese Male',
+        }
+    
+        for voice in self.kokoro_voices:
+            prefix = voice[:2]
+            group_name = mapping.get(prefix, 'Other')
+    
+            if group_name not in groups:
+                groups[group_name] = []
+    
+            groups[group_name].append(voice)
+    
+        return groups
+    
+    
+    def get_available_kokoro_voices(self):
+        return self.group_kokoro_voices()
 
     def setup_kokoro(self):
         self.kokoro_pipeline = KPipeline(lang_code='a')
@@ -103,7 +143,7 @@ class Speech(GstSpeechPlayer):
             logger.warning(f"Invalid Kokoro voice: {voice_name}.")
 
     def get_available_kokoro_voices(self):
-        return self.kokoro_voices.copy()
+        return self.group_kokoro_voices()
 
     def get_default_kokoro_voices(self):
         """Return the default Kokoro voices for UI display."""
