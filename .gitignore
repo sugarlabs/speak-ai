@@ -2,3 +2,20 @@ dist
 .0sugar
 *~
 *.pyc
+__pycache__/
+*.pyo
+*.egg-info/
+
+# API keys — never commit secrets
+API_KEY.txt
+.env
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
