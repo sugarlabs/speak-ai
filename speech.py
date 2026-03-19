@@ -98,7 +98,6 @@ class Speech(GstSpeechPlayer):
         self._cb['idle'] = self.connect('idle', cb)
 
     def set_kokoro_voice(self, voice_name):
-        """Set Kokoro voice. Falls back to default if invalid."""
         if voice_name in self.kokoro_voices:
             self.current_kokoro_voice = voice_name
             logger.debug(f"Kokoro voice set to: {voice_name}")
