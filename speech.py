@@ -103,7 +103,7 @@ class Speech(GstSpeechPlayer):
             logger.debug(f"Kokoro voice set to: {voice_name}")
         else:
             logger.warning(f"Invalid Kokoro voice: {voice_name}.")
-        
+            
     def get_available_kokoro_voices(self):
         return self.kokoro_voices.copy()
 
