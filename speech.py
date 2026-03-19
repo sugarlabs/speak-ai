@@ -71,7 +71,7 @@ class Speech(GstSpeechPlayer):
             'ff_siwis', 'hf_alpha', 'hf_beta', 'hm_omega', 'hm_psi',
             'if_sara', 'im_nicola', 'pf_dora', 'pm_alex', 'pm_santa'
         ]))
-        
+
         self.current_kokoro_voice = 'af_heart'
 
         self._cb = {}
@@ -103,11 +103,7 @@ class Speech(GstSpeechPlayer):
             self.current_kokoro_voice = voice_name
             logger.debug(f"Kokoro voice set to: {voice_name}")
         else:
-            default_voice = self.get_default_kokoro_voices()[0]
-        logger.warning(
-            f"Invalid Kokoro voice: {voice_name}. Falling back to default: {default_voice}"
-        )
-        self.current_kokoro_voice = default_voice
+            logger.warning(f"Invalid Kokoro voice: {voice_name}.")
         
     def get_available_kokoro_voices(self):
         return self.kokoro_voices.copy()
