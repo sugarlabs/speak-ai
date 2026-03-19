@@ -326,6 +326,8 @@ class Speech(GstSpeechPlayer):
 
     def _stream_kokoro_audio(self, text, voice):
         """Stream Kokoro audio chunks to the GStreamer pipeline"""
+        appsrc = None
+        
         try:
             # Getting the appsrc element
             appsrc = self.pipeline.get_by_name('kokoro_src')
@@ -359,38 +361,45 @@ class Speech(GstSpeechPlayer):
             
         except Exception as e:
             # Signalling EOS here as well, but I'm adding error to logs
-            logger.error(f"Error in Kokoro audio streaming: {e}")
+            logger.exception("Error in Kokoro audio streaming")
             if appsrc:
                 appsrc.emit("end-of-stream")
 
     def speak(self, status, text):
         self.make_pipeline()
-        
+    
+        # Try Kokoro first
         if KOKORO_AVAILABLE and self.kokoro_pipeline:
-            logger.debug('Using Kokoro TTS: voice=%s text=%s' % (self.current_kokoro_voice, text))
-            self.restart_sound_device()
-            self._stream_kokoro_audio(text, self.current_kokoro_voice)
-            
-        else:
-            # Fallback to espeak
+            try:
+                logger.debug('Using Kokoro TTS: voice=%s text=%s' % (self.current_kokoro_voice, text))
+                self.restart_sound_device()
+                self._stream_kokoro_audio(text, self.current_kokoro_voice)
+                return
+            except Exception:
+                logger.exception("Kokoro failed, falling back to espeak")
+    
+        # Fallback to espeak
+        try:
             src = self.pipeline.get_by_name('espeak')
-            
+    
             pitch = int(status.pitch) - 100
             rate = int(status.rate) - 100
-
-            logger.debug('Using espeak fallback: pitch=%d rate=%d voice=%s text=%s' % (pitch, rate,
-                                                                status.voice.name,
-                                                                text))
-
+    
+            logger.debug('Using espeak fallback: pitch=%d rate=%d voice=%s text=%s' % (
+                pitch, rate, status.voice.name, text))
+    
             src.props.pitch = pitch
             src.props.rate = rate
             src.props.voice = status.voice.name
             src.props.track = 1
             src.props.text = text
-
+    
             self.restart_sound_device()
-
-
+    
+        except Exception:
+            logger.exception("Fallback to espeak failed")
+    
+    
 _speech = None
 
 
