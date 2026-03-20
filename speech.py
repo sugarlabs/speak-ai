@@ -48,34 +48,39 @@ class Speech(GstSpeechPlayer):
         'wave': (GObject.SIGNAL_RUN_FIRST, None, [GObject.TYPE_PYOBJECT]),
         'idle': (GObject.SIGNAL_RUN_FIRST, None, []),
     }
-
     def __init__(self):
-        GstSpeechPlayer.__init__(self)
-        self.pipeline = None
-        
-        # Initialize Kokoro pipeline if available
-        self.kokoro_pipeline = None
-        if KOKORO_AVAILABLE:
-            threading.Thread(target=self.setup_kokoro).start()
-        
-        # Predefined Kokoro voices for future GUI selection - TODO
-        self.kokoro_voices = [
-            'af_heart', 'af_alloy', 'af_aoede', 'af_bella', 'af_jessica', 'af_kore', 'af_nicole',
-            'af_nova', 'af_river', 'af_sarah', 'af_sky','am_adam', 'am_echo', 'am_eric', 'am_fenrir',
-            'am_adam', 'am_echo', 'am_eric', 'am_fenrir', 'am_liam', 'am_michael', 'am_onyx',
-            'am_puck', 'am_santa', 'bf_alice', 'bf_emma', 'bf_isabella', 'bf_lily', 'bm_daniel',
-            'bm_fable', 'bm_george', 'bm_lewis', 'jf_alpha', 'jf_gongitsune', 'jf_nezumi', 'jf_tebukuro',
-            'jm_kumo', 'zf_xiaobei', 'zf_xiaoni', 'zf_xiaoxiao', 'zf_xiaoyi', 'zm_yunjian',
-            'zm_yunxi', 'zm_yunxia', 'zm_yunyang', 'ef_dora', 'em_alex', 'em_santa',
-            'ff_siwis', 'hf_alpha', 'hf_beta', 'hm_omega', 'hm_psi',
-            'if_sara', 'im_nicola', 'pf_dora', 'pm_alex', 'pm_santa'
-        ]
-        self.current_kokoro_voice = 'af_heart'
+    GstSpeechPlayer.__init__(self)
+    self.pipeline = None
 
-        self._cb = {}
-        for cb in ['peak', 'wave', 'idle']:
-            self._cb[cb] = None
+    # Initialize Kokoro pipeline if available
+    self.kokoro_pipeline = None
+    if KOKORO_AVAILABLE:
+        threading.Thread(target=self.setup_kokoro).start()
 
+    # Predefined Kokoro voices
+    self.kokoro_voices = [
+        'af_heart', 'af_alloy', 'af_aoede', 'af_bella', 'af_jessica', 'af_kore', 'af_nicole',
+        'af_nova', 'af_river', 'af_sarah', 'af_sky',
+        'am_adam', 'am_echo', 'am_eric', 'am_fenrir', 'am_liam', 'am_michael', 'am_onyx',
+        'am_puck', 'am_santa',
+        'bf_alice', 'bf_emma', 'bf_isabella', 'bf_lily',
+        'bm_daniel', 'bm_fable', 'bm_george', 'bm_lewis',
+        'jf_alpha', 'jf_gongitsune', 'jf_nezumi', 'jf_tebukuro',
+        'jm_kumo',
+        'zf_xiaobei', 'zf_xiaoni', 'zf_xiaoxiao', 'zf_xiaoyi',
+        'zm_yunjian', 'zm_yunxi', 'zm_yunxia', 'zm_yunyang',
+        'ef_dora', 'em_alex', 'em_santa',
+        'ff_siwis',
+        'hf_alpha', 'hf_beta', 'hm_omega', 'hm_psi',
+        'if_sara', 'im_nicola',
+        'pf_dora', 'pm_alex', 'pm_santa'
+    ]
+
+    self.current_kokoro_voice = 'af_heart'
+
+    self._cb = {}
+    for cb in ['peak', 'wave', 'idle']:
+        self._cb[cb] = None
     def setup_kokoro(self):
         self.kokoro_pipeline = KPipeline(lang_code='a')
 
@@ -112,6 +117,8 @@ class Speech(GstSpeechPlayer):
     def get_addon_kokoro_voices(self):
         """Return the add-on Kokoro voices for UI display."""
         return [v for v in self.kokoro_voices if v not in self.get_default_kokoro_voices()]
+        
+    
 
     def make_pipeline(self):
         if self.pipeline is not None:
