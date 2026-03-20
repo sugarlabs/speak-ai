@@ -365,7 +365,7 @@ class Speech(GstSpeechPlayer):
 
     def speak(self, status, text):
         if not text or not text.strip():
-            logger.warning("Empty or invalid text input. Skipping speech.")
+            logger.debug("Empty or invalid text input. Skipping speech.")
             return
 
         self.make_pipeline()
