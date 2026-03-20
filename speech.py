@@ -48,7 +48,6 @@ class Speech(GstSpeechPlayer):
         'wave': (GObject.SIGNAL_RUN_FIRST, None, [GObject.TYPE_PYOBJECT]),
         'idle': (GObject.SIGNAL_RUN_FIRST, None, []),
     }
-
     def __init__(self):
     GstSpeechPlayer.__init__(self)
     self.pipeline = None
@@ -77,20 +76,11 @@ class Speech(GstSpeechPlayer):
         'pf_dora', 'pm_alex', 'pm_santa'
     ]
 
-    # ✅ Group voices by language
-    self.kokoro_voices_by_lang = {}
-    for voice in self.kokoro_voices:
-        lang = voice[:2]
-        if lang not in self.kokoro_voices_by_lang:
-            self.kokoro_voices_by_lang[lang] = []
-        self.kokoro_voices_by_lang[lang].append(voice)
-
     self.current_kokoro_voice = 'af_heart'
 
     self._cb = {}
     for cb in ['peak', 'wave', 'idle']:
         self._cb[cb] = None
-
     def setup_kokoro(self):
         self.kokoro_pipeline = KPipeline(lang_code='a')
 
@@ -128,8 +118,7 @@ class Speech(GstSpeechPlayer):
         """Return the add-on Kokoro voices for UI display."""
         return [v for v in self.kokoro_voices if v not in self.get_default_kokoro_voices()]
         
-    def get_kokoro_voices_by_language(self):
-    return self.kokoro_voices_by_lang
+    
 
     def make_pipeline(self):
         if self.pipeline is not None:
