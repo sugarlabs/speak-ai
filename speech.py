@@ -40,7 +40,14 @@ PITCH_MIN = 0
 PITCH_MAX = 200
 RATE_MIN = 0
 RATE_MAX = 200
-
+VOICE_TO_LANG = {
+    'af': 'a', 'am': 'a',
+    'bf': 'b', 'bm': 'b',
+    'hf': 'h', 'hm': 'h',
+    'jf': 'j', 'jm': 'j',
+    'ef': 'e', 'em': 'e',
+    'ff': 'f',
+}
 
 class Speech(GstSpeechPlayer):
     __gsignals__ = {
@@ -98,9 +105,13 @@ class Speech(GstSpeechPlayer):
     def set_kokoro_voice(self, voice_name):
         if voice_name in self.kokoro_voices:
             self.current_kokoro_voice = voice_name
-            logger.debug(f"Kokoro voice set to: {voice_name}")
+            prefix = voice_name[:2]
+            lang_code = VOICE_TO_LANG.get(prefix, 'a')
+            if self.kokoro_pipeline:
+                self.kokoro_pipeline = KPipeline(lang_code=lang_code)
+            logger.debug(f"Kokoro voice set to: {voice_name}, lang: {lang_code}")
         else:
-            logger.warning(f"Invalid Kokoro voice: {voice_name}.")
+            logger.warning(f"Invalid Kokoro voice: {voice_name}.")   
 
     def get_available_kokoro_voices(self):
         return self.kokoro_voices.copy()
