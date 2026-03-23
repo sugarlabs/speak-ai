@@ -21,6 +21,7 @@ jobs:
       - name: Compile multilingual tools
         run: |
           python -m py_compile multilingual.py
+          python -m py_compile speech.py
           python -m py_compile tools/multilingual_eval.py
           python -m py_compile tools/validate_multilingual_routing.py
           python -m py_compile tools/pronunciation_scorecard.py
