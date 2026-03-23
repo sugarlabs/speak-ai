@@ -49,6 +49,12 @@ Recent improvements include:
   Arabic, Chinese Han, and Japanese Kana/Kanji cues), and;
 * short phrase audio caching for faster repeated playback.
 
+Hindi TTS note:
+The activity now detects Devanagari input and automatically routes it to a
+Devanagari-friendly Kokoro voice family (rather than forcing everything
+through an English pipeline). A Hindi test phrase is included in
+`tests/data/multilingual_phrases.json`.
+
 To preview script detection and automatic voice routing logic:
 
 ```
