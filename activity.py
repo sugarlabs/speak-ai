@@ -93,7 +93,7 @@ try:
 except ImportError:
     USING_BRAIN = True
 
-from LLM import is_connected, ask_llm_prompted, DEFAULT_PROMPT
+from LLM import is_connected, ask_llm_prompted, DEFAULT_PROMPT, save_api_key
 from GenAI import is_profane
 
 SERVICE = 'org.sugarlabs.Speak'
