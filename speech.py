@@ -47,6 +47,9 @@ VOICE_TO_LANG = {
     'jf': 'j', 'jm': 'j',
     'ef': 'e', 'em': 'e',
     'ff': 'f',
+    'zf': 'z', 'zm': 'z',
+    'if': 'i', 'im': 'i',
+    'pf': 'p', 'pm': 'p',
 }
 
 class Speech(GstSpeechPlayer):
@@ -59,17 +62,12 @@ class Speech(GstSpeechPlayer):
     def __init__(self):
         GstSpeechPlayer.__init__(self)
         self.pipeline = None
-        
-        # Initialize Kokoro pipeline if available
-        self.kokoro_pipeline = None
-        if KOKORO_AVAILABLE:
-            threading.Thread(target=self.setup_kokoro).start()
-        
+            
         # Predefined Kokoro voices for future GUI selection - TODO
         self.kokoro_voices = [
             'af_heart', 'af_alloy', 'af_aoede', 'af_bella', 'af_jessica', 'af_kore', 'af_nicole',
-            'af_nova', 'af_river', 'af_sarah', 'af_sky','am_adam', 'am_echo', 'am_eric', 'am_fenrir',
-            'am_adam', 'am_echo', 'am_eric', 'am_fenrir', 'am_liam', 'am_michael', 'am_onyx',
+            'af_nova', 'af_river', 'af_sarah', 'af_sky', 'am_adam', 'am_echo', 'am_eric', 'am_fenrir',
+            'am_liam', 'am_michael', 'am_onyx',
             'am_puck', 'am_santa', 'bf_alice', 'bf_emma', 'bf_isabella', 'bf_lily', 'bm_daniel',
             'bm_fable', 'bm_george', 'bm_lewis', 'jf_alpha', 'jf_gongitsune', 'jf_nezumi', 'jf_tebukuro',
             'jm_kumo', 'zf_xiaobei', 'zf_xiaoni', 'zf_xiaoxiao', 'zf_xiaoyi', 'zm_yunjian',
@@ -79,12 +77,23 @@ class Speech(GstSpeechPlayer):
         ]
         self.current_kokoro_voice = 'af_heart'
 
+         # Initialize Kokoro pipeline if available
+        self.kokoro_pipeline = None
+        if KOKORO_AVAILABLE:
+            threading.Thread(target=self.setup_kokoro).start()
+
         self._cb = {}
         for cb in ['peak', 'wave', 'idle']:
             self._cb[cb] = None
 
     def setup_kokoro(self):
-        self.kokoro_pipeline = KPipeline(lang_code='a')
+        if not hasattr(self, 'current_kokoro_voice'):
+            self.current_kokoro_voice = 'af_heart'
+        lang_code = VOICE_TO_LANG.get(
+            self.current_kokoro_voice[:2], 'a'
+        )
+        self.kokoro_pipeline = KPipeline(lang_code=lang_code)
+        self._current_lang_code = lang_code
 
     def disconnect_all(self):
         for cb in ['peak', 'wave', 'idle']:
@@ -107,11 +116,13 @@ class Speech(GstSpeechPlayer):
             self.current_kokoro_voice = voice_name
             prefix = voice_name[:2]
             lang_code = VOICE_TO_LANG.get(prefix, 'a')
-            if self.kokoro_pipeline:
+            current_lang = getattr(self, '_current_lang_code', None)
+            if self.kokoro_pipeline and lang_code != current_lang:
                 self.kokoro_pipeline = KPipeline(lang_code=lang_code)
+                self._current_lang_code = lang_code
             logger.debug(f"Kokoro voice set to: {voice_name}, lang: {lang_code}")
         else:
-            logger.warning(f"Invalid Kokoro voice: {voice_name}.")   
+            logger.warning(f"Invalid Kokoro voice: {voice_name}.")
 
     def get_available_kokoro_voices(self):
         return self.kokoro_voices.copy()
