@@ -3,6 +3,40 @@ import json
 import socket
 import logging
 
+import os
+
+CACHE_FILE = "llm_cache.json"
+CACHE_LIMIT = 50
+
+def load_cache():
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            logging.error(f"Error loading cache: {e}")
+    return {}
+
+def save_cache(cache):
+    try:
+        with open(CACHE_FILE, "w") as f:
+            json.dump(cache, f)
+    except Exception as e:
+        logging.error(f"Error saving cache: {e}")
+
+def get_cached_response(cache, question):
+    return cache.get(question)
+
+def add_to_cache(cache, question, response):
+    if len(cache) >= CACHE_LIMIT:
+        cache.pop(next(iter(cache)))
+    cache[question] = response
+    save_cache(cache)
+    logging.info(f"Cache size: {len(cache)}")
+
+# Load cache when program starts
+cache = load_cache()
+
 #TODO: Dont hard code these, need to see how sugar as a whole manages API Keys
 API_URL = "https://ai.sugarlabs.org/ask-llm-prompted"
 try:
@@ -27,7 +61,18 @@ def ask_llm_prompted(question, custom_prompt = DEFAULT_PROMPT, timeout=120, max_
     if API_KEY is None:
         logging.error("Missing API key file: API_KEY.txt")
         return False
+
+    # Normalize cache key to avoid duplicates due to case or extra spaces
+    # Include prompt to ensure different prompts generate different cached responses
+    cache_key = (question.strip().lower() + custom_prompt.strip().lower())    
+    # Check cache first
+    cached_response = get_cached_response(cache, cache_key)
+    if cached_response:
+        logging.info("Cache hit - returning stored response")
+        return cached_response
     
+    logging.info("Cache miss - calling API")
+
     if not is_connected():
         return False
 
@@ -65,9 +110,15 @@ def ask_llm_prompted(question, custom_prompt = DEFAULT_PROMPT, timeout=120, max_
 
         # Check if the 'answer' key is in the response and return it.
         if isinstance(data, dict) and "answer" in data:
-            return data['answer']
-
+            answer = data['answer']
+            if answer:
+                add_to_cache(cache, cache_key, answer)
+                logging.info("Response saved to cache")
+            return answer
         else:
+            if data:
+                add_to_cache(cache, cache_key, data)
+                logging.info("Response saved to cache")
             return data
 
     except requests.exceptions.Timeout:
