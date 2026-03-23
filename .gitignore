@@ -1,4 +1,6 @@
 dist
 .0sugar
 *~
+/.venv/
+__pycache__/
 *.pyc
