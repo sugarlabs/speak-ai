@@ -53,3 +53,24 @@ The `not-gstreamer1` branch is a backport of features and bug fixes
 from the `master` branch for ongoing maintenance of the activity on
 Fedora 18 systems which don't have well-functioning GStreamer 1
 packages.
+
+## 🛠️ Cross-Platform Setup & Troubleshooting
+
+If you are contributing from **Windows, WSL, or macOS**, please note that the full Sugar Activity environment requires the Sugar Shell. However, you can still develop and test core AI modules.
+
+### 1. Common Issues
+* **`ModuleNotFoundError: No module named 'dbus'`**: This happens because `dbus` is a Linux-specific system bus. It will not work on native Windows. 
+* **`sugar-launch: command not found`**: This command only works inside a Linux environment with Sugar Desktop installed.
+
+### 2. Development Workflow by Platform
+
+| Platform | Capabilities | Recommended Approach |
+| :--- | :--- | :--- |
+| **Linux (Ubuntu/Fedora)** | Full Activity Testing | Install `sugar-desktop` and use `sugar-launch`. |
+| **Windows (Native)** | Logic & AI Testing | Test individual modules (TTS, LLM, Spell Check) using `python -m py_compile` or unit tests. |
+| **Windows (WSL2)** | Near-Full Testing | Use WSL with an X-Server (like GWSL) to run Linux GUI apps. |
+
+### 3. Testing without Sugar Environment
+To verify your code changes without running the full UI:
+1. **Syntax Check:** `python -m py_compile activity.py`
+2. **Module Test:** Run specific logic files directly (e.g., `python GenAI/spell_handler.py`) if they have a `if __name__ == "__main__":` block.
