@@ -27,16 +27,17 @@ def bad_word_list() -> list:
     with open(os.path.join(os.path.dirname(__file__), "profainity_blacklist.txt"), "r") as f: #the main reason why we have it encoded in b64 is so that even if a kid stumbles across this txt file by mistake they wont be able to understand anything
         a = f.readlines()
     decoded_list = [base64.b64decode(line.strip()).decode('utf-8') for line in a]
-
     return decoded_list
 
+# cache once at import time so we don't hit the file on every is_profane() call
+_BLACKLIST = set(word.lower() for word in bad_word_list())
+
 def is_profane(text: str) -> bool:
-        """
-        Check if the given string contains any profanity from the blacklist (whole word match only).
-        """
-        words = [w.strip(".,!?;:()[]{}\"'").lower() for w in text.split()]
-        blacklist = set(word.lower() for word in bad_word_list())
-        for w in words:
-            if w in blacklist:
-                return True
-        return False
+    """
+    Check if the given string contains any profanity from the blacklist (whole word match only).
+    """
+    words = [w.strip(".,!?;:()[]{}\"'").lower() for w in text.split()]
+    for w in words:
+        if w in _BLACKLIST:
+            return True
+    return False
