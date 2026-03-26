@@ -61,9 +61,8 @@ def is_connected():
 
 def ask_llm_prompted(question, custom_prompt = DEFAULT_PROMPT, timeout=120, max_length=200):
     if API_KEY is None:
-        logging.error("Missing API key. Use save_api_key() or place it in activity_root/data/api_key")
-        return False
-    
+        logging.error("API key not set. Please enter your Sugar-AI API key via the activity settings.")
+        return Fase
     if not is_connected():
         return False
 
