@@ -57,18 +57,20 @@ packages.
 API Key Configuration
 =====================
 
-Speak-AI uses the [Sugar-AI](https://ai.sugarlabs.org/) backend for
+Speak-AI uses the `Sugar-AI <https://ai.sugarlabs.org/>`_ backend for
 LLM-powered chatbot responses. An API key is required for this feature.
 
-The key is stored in the activity's persistent data directory
-(`<activity_root>/data/api_key`), which is the standard Sugar location
-for per-activity configuration that survives across sessions.
+**Getting an API key:**
 
-To set up your API key, create the file manually:
-```
-echo "YOUR_API_KEY" > ~/.sugar/default/vu.lux.olpc.Speak/data/api_key
-```
+1. Visit https://ai.sugarlabs.org/oauth-login
+2. Sign in with GitHub or Google.
+3. Copy your API key from the dashboard.
 
-The exact path may vary depending on your Sugar profile. If the key is
-missing, the activity will log the expected path on startup and fall
-back to the on-device SLM or AIML brain.
+**Setting the key in the activity:**
+
+When you launch Speak-AI for the first time, a dialog will
+automatically prompt you to enter your API key. To change it later,
+click the **Set Sugar-AI API Key** button in the activity toolbar.
+
+If no key is set, the activity will fall back to the on-device SLM
+or AIML brain.
