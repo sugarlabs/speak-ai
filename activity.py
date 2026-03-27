@@ -21,7 +21,6 @@
 #
 #     You should have received a copy of the GNU General Public License
 #     along with Speak.activity.  If not, see <http://www.gnu.org/licenses/>.
-
 import logging
 import os
 import dbus
@@ -207,6 +206,7 @@ class SpeakActivity(activity.Activity):
         self._current_persona = 'Jane'
 
         # make an audio device for playing back and rendering audio
+
         self.connect('notify::active', self._active_cb)
         self._cfg = {}
 
@@ -215,7 +215,7 @@ class SpeakActivity(activity.Activity):
 
         if self._tablet_mode:
             self._entry = Gtk.Entry()
-            self.entry.set_placeholder_text("Type something to speak…")
+            self._entry.set_placeholder_text(_("Type something to speak…"))
             self._entry_box.pack_start(self._entry, True, True, 0)
             talk_button = ToolButton('microphone')
             talk_button.set_tooltip(_('Speak'))
@@ -225,13 +225,17 @@ class SpeakActivity(activity.Activity):
             self._entrycombo = Gtk.ComboBoxText.new_with_entry()
             self._entrycombo.connect('changed', self._combo_changed_cb)
             self._entry = self._entrycombo.get_child()
+
+            # --- Fix code ---
+            self._entry.set_placeholder_text(_("Type something to speak…"))
+            print(f"\n✅ SUCCESS: Placeholder set to '{self._entry.get_placeholder_text()}'")
             self._entry.set_size_request(-1, style.GRID_CELL_SIZE)
             self._entry_box.pack_start(self._entrycombo, True, True, 0)
-        self._entry.set_editable(True)
-        self._entry.connect('activate', self._entry_activate_cb)
-        self._entry.connect('key-press-event', self._entry_key_press_cb)
-        self._entry.modify_font(Pango.FontDescription('sans bold 24'))
-        self._entry_box.show()
+            self._entry.set_editable(True)
+            self._entry.connect('activate', self._entry_activate_cb)
+            self._entry.connect('key-press-event', self._entry_key_press_cb)
+            self._entry.modify_font(Pango.FontDescription('sans bold 24'))
+            self._entry_box.show()
 
         self.face = face.View(fill_color=lighter)
         self._cartoon_face = self.face
