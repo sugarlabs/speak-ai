@@ -3,7 +3,7 @@ What is this?
 
 Speak is a voice synthesis activity for the Sugar desktop.
 
-Speak shows a face that will talk what is typed, within reason.
+Speak shows a face that will say what is typed, within reason.
 
 How to use?
 ===========
@@ -53,3 +53,9 @@ The `not-gstreamer1` branch is a backport of features and bug fixes
 from the `master` branch for ongoing maintenance of the activity on
 Fedora 18 systems which don't have well-functioning GStreamer 1
 packages.
+AI Features
+===========
+
+Speak-AI extends Speak with AI-powered voice synthesis using the
+Kokoro TTS engine, enabling higher quality and more natural speech
+output for children using the Sugar desktop.
