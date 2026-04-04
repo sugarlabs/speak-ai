@@ -53,3 +53,12 @@ The `not-gstreamer1` branch is a backport of features and bug fixes
 from the `master` branch for ongoing maintenance of the activity on
 Fedora 18 systems which don't have well-functioning GStreamer 1
 packages.
+
+
+## Setting Up for Development
+
+### On Linux (Ubuntu/Debian)
+```bash
+sudo apt install gstreamer1.0-espeak gir1.2-gstreamer-1.0
+pip install -r requirements.txt
+python activity.py
