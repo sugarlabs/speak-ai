@@ -949,8 +949,18 @@ class SpeakActivity(activity.Activity):
         self._persona_box.show_all()
         
     def _kokoro_voice_changed_event_cb(self, widget, event, voice_name):
+        # Remove previously shown status label to avoid stacking labels when
+        # users rapidly click different voices.
+        existing_label = getattr(self, '_kokoro_info_label', None)
+        if existing_label is not None:
+            try:
+                self._kokoro_voice_box.remove(existing_label)
+            except Exception:
+                pass
+            
         # Show info label(Indication of voice changing) upon click
         info_label = Gtk.Label()
+        self._kokoro_info_label = info_label
         info_label.set_markup('<span foreground="blue" size="large">%s</span>' % _('Please wait...'))
         self._kokoro_voice_box.pack_start(info_label, False, False, style.DEFAULT_PADDING)
         info_label.show()
@@ -1001,7 +1011,13 @@ class SpeakActivity(activity.Activity):
                 Gtk.main_iteration()
 
             def _remove_info_label():
-                self._kokoro_voice_box.remove(info_label)
+                if getattr(self, '_kokoro_info_label', None) is info_label:
+                    try:
+                        self._kokoro_voice_box.remove(info_label)
+                    except Exception:
+                        pass
+                    self._kokoro_info_label = None
+                return False
             GLib.timeout_add(3000, _remove_info_label)
 
         GLib.idle_add(async_check_and_update)
@@ -1364,10 +1380,21 @@ class SpeakActivity(activity.Activity):
                         llm_thread.start()
                     else:
                         # No internet, try SLM -> Brain
-                        response = self._try_slm_response(text)
-                        if not response:
-                            response = brain.respond(text)
-                        self.face.say(response)
+                        self.face.say("Thinking...")
+
+                        def fetch_offline_response():
+                            response = self._try_slm_response(text)
+                            if not response:
+                                response = brain.respond(text)
+
+                            def safe_face_say():
+                                self.face.say(response)
+                                return False
+                            GLib.idle_add(safe_face_say)
+
+                        offline_thread = threading.Thread(target=fetch_offline_response)
+                        offline_thread.daemon = True
+                        offline_thread.start()
                 else:
                     # Use traditional brain chatbot
                     brain_response = brain.respond(text)
