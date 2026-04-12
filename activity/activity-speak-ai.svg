@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="55" height="55" viewBox="0 0 55 55"
+     version="1.1">
+
+  <circle cx="27" cy="26" r="18"
+          fill="#FF8C00" stroke="#C46200" stroke-width="1.5"/>
+
+  <circle cx="20" cy="22" r="3.5" fill="#FFFFFF"/>
+  <circle cx="34" cy="22" r="3.5" fill="#FFFFFF"/>
+  <circle cx="21" cy="22" r="2" fill="#1A1A1A"/>
+  <circle cx="35" cy="22" r="2" fill="#1A1A1A"/>
+
+  <ellipse cx="27" cy="32" rx="6" ry="4" fill="#FFFFFF"/>
+  <ellipse cx="27" cy="33" rx="4" ry="2.5" fill="#C46200"/>
+
+  <rect x="36" y="4" width="16" height="11"
+        rx="3" ry="3" fill="#00B4D8"/>
+  <polygon points="39,15 36,19 43,15" fill="#00B4D8"/>
+
+  <circle cx="40" cy="9.5" r="1.5" fill="#FFFFFF"/>
+  <circle cx="44" cy="9.5" r="1.5" fill="#FFFFFF"/>
+  <circle cx="48" cy="9.5" r="1.5" fill="#FFFFFF"/>
+
+  <path d="M 8 44 Q 27 39 46 44"
+        fill="none" stroke="#00B4D8"
+        stroke-width="2" stroke-linecap="round"/>
+  <path d="M 4 50 Q 27 43 50 50"
+        fill="none" stroke="#00B4D8"
+        stroke-width="1.5" stroke-linecap="round"
+        opacity="0.6"/>
+
+</svg>
