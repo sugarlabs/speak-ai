@@ -312,7 +312,6 @@ class SpeakActivity(activity.Activity):
         self._persona_button.connect('clicked', self._face_palette_cb)
         toolbox.toolbar.insert(self._persona_button, -1)
 
-
         self._kokoro_button = ToolButton('module-language')
         self._kokoro_button.set_tooltip(_('Choose Kokoro voice:'))
         self._make_kokoro()
