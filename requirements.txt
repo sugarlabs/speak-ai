@@ -7,3 +7,5 @@ torch
 transformers
 requests
 pyspellchecker
+soundfile
+kokoro

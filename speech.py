@@ -87,7 +87,7 @@ class Speech(GstSpeechPlayer):
         self.current_language = 'en'
         if KOKORO_AVAILABLE:
             # threading.Thread(target=self.setup_kokoro).start()
-            threading.Thread(target=self.setup_kokoro, args=('en',)).start()
+            self.setup_kokoro('en')
 
 
         
@@ -172,6 +172,8 @@ class Speech(GstSpeechPlayer):
     
     def get_cached_audio(self, text, voice):
         """Return cached audio for text+voice if available, else None."""
+        if text is None or voice is None:
+            return None
         key = self._get_cache_key(text, voice)
         with self._cache_lock:
             if key in self._audio_cache:
@@ -525,6 +527,8 @@ class Speech(GstSpeechPlayer):
                 return
 
             # Not in cache — generate with Kokoro and cache it
+            if not text or not text.strip():
+                return
             audio_generator = self.kokoro_pipeline(text, voice=voice)
             chunks_to_cache = []
 
