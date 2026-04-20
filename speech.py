@@ -77,7 +77,8 @@ class Speech(GstSpeechPlayer):
     def __init__(self):
         GstSpeechPlayer.__init__(self)
         self.pipeline = None
-        
+ 
+        self.kokoro_pipeline = None         
         # Initialize Kokoro pipeline if available
         self._pipeline_lock = threading.Lock()
         self._audio_cache = OrderedDict()
@@ -231,21 +232,27 @@ class Speech(GstSpeechPlayer):
             corrected_words = []
             
             for word in words:
-                correction = spell.correction(word)
-                if correction and correction != word:
-                    logger.debug(f"Spelling corrected: {word} -> {correction}")
-                    corrected_words.append(correction)
+                stripped = word.strip('.,!?;:\'"')
+                punct = word[len(stripped):]
+                if not stripped or stripped[0].isupper():
+                    corrected_words.append(word)
+                    continue
+                candidates = spell.candidates(stripped)
+                correction = spell.correction(stripped)
+                if correction and correction != stripped and len(candidates) == 1:
+                    logger.debug(f"Spelling corrected: {stripped} -> {correction}")
+                    corrected_words.append(correction + punct)
                 else:
                     corrected_words.append(word)
-            
             corrected = ' '.join(corrected_words)
             if corrected != text:
-                logger.debug(f"Full correction: '{text}' -> '{corrected}'")
-            return corrected
-        
+               logger.debug(f"Full correction: '{text}' -> '{corrected}'")
+               return corrected
+ 
         except Exception as e:
             logger.warning(f"Spell correction failed: {e}")
             return text
+        
         
 
     
@@ -274,6 +281,7 @@ class Speech(GstSpeechPlayer):
         return [v for v in self.kokoro_voices if v not in self.get_default_kokoro_voices()]
 
     def make_pipeline(self):
+        
         if self.pipeline is not None:
             self.stop_sound_device()
             del self.pipeline
@@ -484,48 +492,14 @@ class Speech(GstSpeechPlayer):
         bus.add_signal_watch()
         bus.connect('message', gst_message_cb)
 
-    def _stream_kokoro_audio(self, text, voice):
-        """Stream Kokoro audio chunks to the GStreamer pipeline"""
-        try:
-            # Getting the appsrc element
-            appsrc = self.pipeline.get_by_name('kokoro_src')
-            if not appsrc:
-                logger.error("Could not find kokoro_src element")
-                return
-            
-            # Set caps for Kokoro audio
-            caps = Gst.Caps.from_string(
-                "audio/x-raw,format=F32LE,layout=interleaved,rate=24000,channels=1"
-            )
-            appsrc.set_property("caps", caps)
-
-            audio_generator = self.kokoro_pipeline(text, voice=voice) # actual audio generation by kokoro
-
-            # Stream audio chunks
-            for i, (gs, ps, audio_chunk) in enumerate(audio_generator):
-                # Convert tensor to numpy array then to bytes
-                data_bytes = audio_chunk.numpy().tobytes()
-                
-                # Create GStreamer buffer
-                buf = Gst.Buffer.new_wrapped(data_bytes)
-                
-                # Push buffer to appsrc
-                ret = appsrc.emit("push-buffer", buf)
-                if ret != Gst.FlowReturn.OK:
-                    logger.error(f"Error pushing buffer {i} to GStreamer")
-                    break
-
-            appsrc.emit("end-of-stream") # Signal EOS
-            
-        except Exception as e:
-            # Signalling EOS here as well, but I'm adding error to logs
-            logger.error(f"Error in Kokoro audio streaming: {e}")
-            if appsrc:
-                appsrc.emit("end-of-stream")
+    
     def _stream_kokoro_audio(self, text, voice):
         """Stream Kokoro audio chunks to the GStreamer pipeline.
         Uses cache for repeated phrases to avoid regenerating audio.
         """
+        if not self.kokoro_pipeline:
+            logger.warning("Kokoro not ready yet, skipping")
+            return
         try:
             appsrc = self.pipeline.get_by_name('kokoro_src')
             if not appsrc:
@@ -554,7 +528,11 @@ class Speech(GstSpeechPlayer):
             audio_generator = self.kokoro_pipeline(text, voice=voice)
             chunks_to_cache = []
 
-            for i, (gs, ps, audio_chunk) in enumerate(audio_generator):
+            self.pipeline.set_state(Gst.State.PLAYING)
+            for i, result in enumerate(audio_generator):
+                audio_chunk = result[2]
+                if audio_chunk is None:
+                    continue
                 data_bytes = audio_chunk.numpy().tobytes()
                 chunks_to_cache.append(data_bytes)
 
@@ -569,11 +547,14 @@ class Speech(GstSpeechPlayer):
             appsrc.emit("end-of-stream")
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             logger.error(f"Error in Kokoro audio streaming: {e}")
             if appsrc:
                 appsrc.emit("end-of-stream")
 
     def speak(self, status, text):
+        
         self.make_pipeline()
         
     
