@@ -1,3 +1,4 @@
+import os
 import requests
 import json
 import socket
@@ -6,7 +7,7 @@ import logging
 #TODO: Dont hard code these, need to see how sugar as a whole manages API Keys
 API_URL = "https://ai.sugarlabs.org/ask-llm-prompted"
 try:
-    with open("API_KEY.txt", "r") as f:
+    with open(os.path.join(os.path.dirname(__file__), "API_KEY.txt"), "r") as f:
         API_KEY = f.read().strip()
 except OSError:
     logging.error("Missing API_KEY.txt file.")
