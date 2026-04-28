@@ -178,9 +178,9 @@ def _is_tablet_mode():
     return False
 
 
-class SpeakActivity(activity.Activity):
+class SpeakAIActivity(activity.Activity):
     def __init__(self, handle):
-        super(SpeakActivity, self).__init__(handle)
+        super(SpeakAIActivity, self).__init__(handle)
 
         self._notebook = Gtk.Notebook()
         self.set_canvas(self._notebook)
