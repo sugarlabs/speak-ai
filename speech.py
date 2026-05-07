@@ -99,6 +99,15 @@ class Speech(GstSpeechPlayer):
         if voice_name in self.kokoro_voices:
             self.current_kokoro_voice = voice_name
             logger.debug(f"Kokoro voice set to: {voice_name}")
+            
+            # Switch language pipeline if necessary
+            if KOKORO_AVAILABLE and self.kokoro_pipeline:
+                new_lang_code = voice_name[0]
+                if new_lang_code in 'abjzefhip':
+                    if hasattr(self.kokoro_pipeline, 'lang_code') and self.kokoro_pipeline.lang_code != new_lang_code:
+                        logger.debug(f"Switching Kokoro pipeline language to {new_lang_code}")
+                        model = self.kokoro_pipeline.model
+                        self.kokoro_pipeline = KPipeline(lang_code=new_lang_code, model=model)
         else:
             logger.warning(f"Invalid Kokoro voice: {voice_name}.")
 
