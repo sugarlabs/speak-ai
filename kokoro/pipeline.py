@@ -144,8 +144,22 @@ class KPipeline:
                 raise
         else:
             language = LANG_CODES[lang_code]
-            logger.warning(f"Using EspeakG2P(language='{language}'). Chunking logic not yet implemented, so long texts may be truncated unless you split them with '\\n'.")
-            self.g2p = espeak.EspeakG2P(language=language)
+            if lang_code in ['h', 'r', 's']:
+                import sys
+                import os
+                sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                from g2p_ext import AdvancedG2P
+                
+                class CustomG2PWrapper:
+                    def __init__(self, lc):
+                        self.lc = lc
+                    def __call__(self, text):
+                        return AdvancedG2P.phonemize(text, self.lc)
+                self.g2p = CustomG2PWrapper(lang_code)
+                logger.info(f"Using AdvancedG2P engine natively for language: '{language}'.")
+            else:
+                logger.warning(f"Using EspeakG2P(language='{language}'). Chunking logic not yet implemented, so long texts may be truncated unless you split them with '\\n'.")
+                self.g2p = espeak.EspeakG2P(language=language)
 
     def load_single_voice(self, voice: str):
         if voice in self.voices:
