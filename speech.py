@@ -1,7 +1,7 @@
 # Copyright (C) 2009, Aleksey Lim
 # Copyright (C) 2019, Chihurumnaya Ibiam <ibiamchihurumnaya@sugarlabs.org>
 # Copyright (C) 2025, Mebin J Thattil <mail@mebin.in>
-# Copyright (C) 2025, [Your Name] <your@email.com>
+# Copyright (C) 2026, Dashpreet Singh <dashpreetsinghhanda@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
