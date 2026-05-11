@@ -16,8 +16,9 @@
 
 import os
 import warnings
-from typing import Dict, List
+from typing import Dict, List, Optional
 from . import profainity_check
+from .cache import ResponseCache
 
 try:
     from llama_cpp import Llama
@@ -33,12 +34,15 @@ warnings.filterwarnings("ignore")
 class GGUFInference:
     def __init__(self, model_path: str, max_context_tokens: int = 1500,
                  generation_mode: int = 1, n_threads: int = 1,
-                 verbose: bool = False):
+                 verbose: bool = False, cache_enabled: bool = True,
+                 max_cache_size: int = 100):
         """ARGS:
         max_context_tokens: For the model used the actual max context window
                            is 2048, but reducing cause we use an approximation
                            while calculating the token count (*1.3)
         generation_mode: 1 = default, sets temp = 0.7
+        cache_enabled: Whether to enable response caching (default: True)
+        max_cache_size: Maximum number of cached responses (default: 100)
         """
         if not GGUF_AVAILABLE:
             raise ImportError("llama-cpp-python is not available. Install using pip")
@@ -52,6 +56,10 @@ class GGUFInference:
         self.conversation_history: List[Dict[str, str]] = []
         self.generation_settings: dict = self._get_generation_settings(generation_mode)
         self.blacklisted_words = profainity_check.bad_word_list()
+        
+        # Initialize response cache
+        self.cache_enabled = cache_enabled
+        self.response_cache = ResponseCache(max_cache_size=max_cache_size) if cache_enabled else None
 
         self.model = Llama(
             model_path=model_path,
@@ -200,22 +208,33 @@ class GGUFInference:
 
         return teacher_response
     
-    def ask_question(self, question: str, maintain_conversation: bool = True) -> str:
+    def ask_question(self, question: str, maintain_conversation: bool = True,
+                     use_cache: bool = True) -> str:
         """
         Ask the model a single question and get a response.
         
         Args:
             question: The question to ask
             maintain_conversation: Whether to add this Q&A to conversation history
+            use_cache: Whether to check/use cache for this query (default: True)
             
         Returns:
             The model's response
         """
+        # Check cache first if enabled and use_cache is True
+        if self.cache_enabled and use_cache:
+            cached_response = self.response_cache.get(question)
+            if cached_response is not None:
+                return cached_response
+        
         # Check for profanity in student input
         if self._contains_profanity(question):
             blocked_response = "Looks like you have typed in a blacklisted word"
             if maintain_conversation:
                 self.conversation_history.append({"student": question, "teacher": blocked_response})
+            # Cache blocked response
+            if self.cache_enabled and use_cache:
+                self.response_cache.set(question, blocked_response)
             return blocked_response
 
         if maintain_conversation:
@@ -237,11 +256,18 @@ class GGUFInference:
                 blocked_response = "Sorry, I cant answer this, can we talk about something else"
                 if maintain_conversation:
                     self.conversation_history.append({"student": question, "teacher": blocked_response})
+                # Cache blocked response
+                if self.cache_enabled and use_cache:
+                    self.response_cache.set(question, blocked_response)
                 return blocked_response
 
             # Add to conversation history if requested
             if maintain_conversation:
                 self.conversation_history.append({"student": question, "teacher": teacher_response})
+
+            # Cache the successful response
+            if self.cache_enabled and use_cache:
+                self.response_cache.set(question, teacher_response)
 
             return teacher_response
 
@@ -249,6 +275,22 @@ class GGUFInference:
             error_msg = f"Error generating response: {e}"
             print(error_msg)
             return "I'm not sure how to respond to that. There has been some kind of error."
+    
+    def clear_cache(self) -> None:
+        # Clear all cached responses.
+        if self.cache_enabled and self.response_cache:
+            self.response_cache.clear()
+    
+    def get_cache_stats(self) -> Optional[dict]:
+        if self.cache_enabled and self.response_cache:
+            return self.response_cache.get_stats()
+        return None
+    
+    def set_cache_enabled(self, enabled: bool) -> None:
+        #Enable or disable caching.
+        self.cache_enabled = enabled
+        if enabled and self.response_cache is None:
+            self.response_cache = ResponseCache(max_cache_size=100)
 
 
 def load_gguf_model(model_path: str, **kwargs) -> GGUFInference:

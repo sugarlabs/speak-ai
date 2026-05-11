@@ -40,11 +40,10 @@ and Ubuntu systems dependencies include `gstreamer1.0-espeak`,
 `gir1.2-gstreamer-1.0`, and `gir1.2-gst-plugins-base-1.0`.
 
 Development Setup
-=================
 
 To set up a development environment for Speak AI, use a Python virtual environment.
 
-**On Debian and Ubuntu systems**, before creating a virtual environment and running
+On Debian and Ubuntu systems, before creating a virtual environment and running
 `pip install -r requirements.txt`, install the required build tools and development
 headers. These are needed to build packages from source, particularly `blis`:
 
@@ -62,13 +61,13 @@ pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 ```
 
-**On Fedora systems**, install the equivalent development packages:
+On Fedora systems, install the equivalent development packages:
 
 ```bash
 sudo dnf install -y gcc gcc-c++ gcc-gfortran make python3-devel
 ```
 
-**On Windows and WSL**, ensure you have a compatible C++ compiler (MSVC for Windows,
+On Windows and WSL, ensure you have a compatible C++ compiler (MSVC for Windows,
 or install build-essential in WSL).
 
 Branch master

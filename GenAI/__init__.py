@@ -16,3 +16,4 @@
 
 from .gguf_inference import load_gguf_model
 from .profainity_check import *
+from .cache import ResponseCache, create_cache
