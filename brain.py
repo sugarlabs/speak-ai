@@ -142,7 +142,7 @@ def load(activity, voice, sorry=None):
                 _("Hello, I'm a robot \"%s\". Please ask me any question.") \
                 % brain_name
             if sorry:
-                hello += ' ' + sorry
+                hello += ' ' + sorry 
             activity.face.say_notification(hello)
         elif sorry:
             activity.face.say_notification(sorry)

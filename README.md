@@ -39,6 +39,38 @@ Speak is not packaged by Debian and Ubuntu distributions.  On Debian
 and Ubuntu systems dependencies include `gstreamer1.0-espeak`,
 `gir1.2-gstreamer-1.0`, and `gir1.2-gst-plugins-base-1.0`.
 
+Development Setup
+=================
+
+To set up a development environment for Speak AI, use a Python virtual environment.
+
+**On Debian and Ubuntu systems**, before creating a virtual environment and running
+`pip install -r requirements.txt`, install the required build tools and development
+headers. These are needed to build packages from source, particularly `blis`:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential python3-dev gfortran
+```
+
+Then proceed with the virtual environment setup:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
+```
+
+**On Fedora systems**, install the equivalent development packages:
+
+```bash
+sudo dnf install -y gcc gcc-c++ gcc-gfortran make python3-devel
+```
+
+**On Windows and WSL**, ensure you have a compatible C++ compiler (MSVC for Windows,
+or install build-essential in WSL).
+
 Branch master
 =============
 
