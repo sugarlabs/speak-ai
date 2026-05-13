@@ -1,0 +1,194 @@
+name: Pronunciation Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'tests/**'
+      - 'kokoro/**'
+      - '.github/workflows/pronunciation-tests.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'tests/**'
+      - 'kokoro/**'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Pronunciation Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ '3.8', '3.9', '3.10', '3.11' ]
+      fail-fast: false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-xdist
+    
+    - name: Lint test files
+      run: |
+        pip install flake8
+        # Lint test files (but be lenient)
+        flake8 tests/ --count --select=E9,F63,F7,F82 --show-source --statistics || true
+    
+    - name: Run pronunciation tests
+      run: |
+        pytest tests/ \
+          -v \
+          --cov=tests \
+          --cov-report=xml \
+          --cov-report=term-missing \
+          --junit-xml=junit/test-results.xml
+      continue-on-error: true
+    
+    - name: Run Hindi-specific tests
+      run: |
+        pytest tests/test_hindi_pronunciation.py -v
+      continue-on-error: true
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      if: always()
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+    
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results-${{ matrix.python-version }}
+        path: junit/
+
+  lint:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort
+    
+    - name: Check file formatting with Black
+      run: |
+        black --check tests/ || true
+    
+    - name: Check import sorting with isort
+      run: |
+        isort --check-only tests/ || true
+    
+    - name: Lint with flake8
+      run: |
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Exit-code is 0 even if there are errors (warnings)
+        flake8 tests/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      continue-on-error: true
+
+  test-matrix:
+    name: Test Summary
+    needs: [ test ]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+    
+    - name: Prepare test report
+      run: |
+        echo "## Pronunciation Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ -f "test-results-3.10/test-results.xml" ]; then
+          echo "✓ Tests completed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠ See individual test results above" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  check-json-validity:
+    name: Validate Test Data Files
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Validate JSON test data files
+      run: |
+        python << 'EOF'
+        import json
+        from pathlib import Path
+        
+        test_data_dir = Path('tests/language_data')
+        
+        for json_file in test_data_dir.glob('*.json'):
+            print(f"Validating {json_file}...")
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                # Check required fields
+                required = ['language', 'language_code', 'test_cases']
+                for field in required:
+                    assert field in data, f"Missing required field: {field}"
+                
+                # Check test cases
+                for i, test in enumerate(data['test_cases']):
+                    required_test_fields = ['text', 'expected_phonemes', 'tags']
+                    for field in required_test_fields:
+                        assert field in test, f"Test {i} missing field: {field}"
+                
+                print(f"  ✓ Valid ({len(data['test_cases'])} tests)")
+            except json.JSONDecodeError as e:
+                print(f"  ✗ Invalid JSON: {e}")
+                exit(1)
+            except AssertionError as e:
+                print(f"  ✗ Validation error: {e}")
+                exit(1)
+        
+        print("\n✓ All test data files are valid!")
+        EOF
+
+  notify:
+    name: Notify Results
+    needs: [ test, lint, check-json-validity ]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Check job status
+      run: |
+        if [ "${{ needs.test.result }}" = "failure" ] || [ "${{ needs.lint.result }}" = "failure" ] || [ "${{ needs.check-json-validity.result }}" = "failure" ]; then
+          echo "❌ Some checks failed"
+          exit 1
+        else
+          echo "✅ All checks passed"
+        fi

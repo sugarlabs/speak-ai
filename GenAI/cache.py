@@ -103,7 +103,7 @@ class ResponseCache:
             print(f"Warning: Failed to load cache from {self.cache_file}: {e}")
     
     def get_stats(self) -> dict:
-        """Return cache statistics."""
+        # Return cache statistics.
         total_requests = self.hits + self.misses
         hit_rate = (self.hits / total_requests * 100) if total_requests > 0 else 0
         

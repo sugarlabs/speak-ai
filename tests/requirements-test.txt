@@ -1,0 +1,19 @@
+# Test Framework Requirements
+# Install with: pip install -r tests/requirements-test.txt
+
+# Core testing framework
+pytest>=7.0.0
+pytest-cov>=3.0.0
+
+# Optional: For running tests in parallel
+pytest-xdist>=2.5.0
+
+# Optional: For better test output
+pytest-html>=3.1.0
+
+# Optional: For timing tests
+pytest-benchmark>=3.4.0
+
+# Language support
+# Install language-specific packages as needed:
+# misaki>=0.2.0  # For Hindi, Japanese, Chinese G2P

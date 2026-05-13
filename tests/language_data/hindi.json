@@ -1,0 +1,135 @@
+{
+  "language": "Hindi",
+  "language_code": "hi",
+  "description": "Pronunciation test cases for Hindi (Devanagari script)",
+  "notes": "Hindi uses IPA notation. Key phonological rules tested: schwa deletion (both word-final and medial), geminate consonants, vowel length.",
+  "test_categories": {
+    "schwa_deletion": {
+      "description": "Hindi word-final and medial schwa deletion rules",
+      "notes": "In Hindi, word-final schwas are typically deleted, and medial schwas are often deleted in certain contexts"
+    },
+    "geminate_consonants": {
+      "description": "Testing proper gemination of consonants",
+      "notes": "Geminate (doubled) consonants are phonemically distinct in Hindi"
+    },
+    "vowel_length": {
+      "description": "Testing long vs short vowel distinctions",
+      "notes": "Hindi distinguishes between short and long vowels"
+    },
+    "nasal_assimilation": {
+      "description": "Testing nasal consonant assimilation",
+      "notes": "Nasals assimilate to the place of articulation of following consonants"
+    },
+    "aspiration": {
+      "description": "Testing aspirated vs unaspirated consonants",
+      "notes": "Hindi distinguishes between aspirated and unaspirated stops"
+    }
+  },
+  "test_cases": [
+    {
+      "text": "काम",
+      "expected_phonemes": "/kaːm/",
+      "description": "Word-final schwa deletion",
+      "tags": ["schwa_deletion", "word_final"],
+      "notes": "Transliteration: kāma. Should produce /kaːm/ NOT /kaːmə/. The final schwa is deleted."
+    },
+    {
+      "text": "रास्ता",
+      "expected_phonemes": "/raːstaː/",
+      "description": "Medial schwa deletion",
+      "tags": ["schwa_deletion", "medial"],
+      "notes": "Transliteration: rāstā. Should produce /raːstaː/ NOT /raːsətaː/. Medial schwa before word-final syllable is deleted."
+    },
+    {
+      "text": "अदृश्य",
+      "expected_phonemes": "/ədrɪʂjə/",
+      "description": "Initial schwa and retroflex sounds",
+      "tags": ["schwa_deletion", "retroflex"],
+      "notes": "Transliteration: adṛśya. Contains initial schwa (typically present) and retroflex /ʂ/ from 'sh' conjunct."
+    },
+    {
+      "text": "कक्षा",
+      "expected_phonemes": "/kəkʂaː/",
+      "description": "Geminate consonants",
+      "tags": ["geminate_consonants"],
+      "notes": "Transliteration: kakṣā. Double 'k' creates geminates in the conjunct. Final schwa deleted."
+    },
+    {
+      "text": "पत्र",
+      "expected_phonemes": "/pətər/",
+      "description": "Consonant clusters with medial schwa deletion",
+      "tags": ["schwa_deletion", "consonant_clusters"],
+      "notes": "Transliteration: patra. Shows schwa deletion before final /r/."
+    },
+    {
+      "text": "चल",
+      "expected_phonemes": "/tʃəl/",
+      "description": "Palatal affricate initial",
+      "tags": ["palatal"],
+      "notes": "Transliteration: cala. Starts with palatal affricate /tʃ/."
+    },
+    {
+      "text": "नाम",
+      "expected_phonemes": "/naːm/",
+      "description": "Nasal consonant at word final",
+      "tags": ["nasals"],
+      "notes": "Transliteration: nāma. Velar nasal /ŋ/ before word-final /m/."
+    },
+    {
+      "text": "कहानी",
+      "expected_phonemes": "/kəhaːniː/",
+      "description": "Multiple vowels with length distinctions",
+      "tags": ["vowel_length"],
+      "notes": "Transliteration: kahānī. Long vowels marked with colon (:). Final /iː/ is long."
+    },
+    {
+      "text": "हर्ष",
+      "expected_phonemes": "/hərʂ/",
+      "description": "Retroflex fricative",
+      "tags": ["retroflex"],
+      "notes": "Transliteration: harṣa. Contains retroflex /ʂ/."
+    },
+    {
+      "text": "सुंदर",
+      "expected_phonemes": "/sʊndar/",
+      "description": "Anusvara (nasal marker) handling",
+      "tags": ["nasals", "anusvara"],
+      "notes": "Transliteration: sundar. The anusvara (ं) creates /n/ before /d/."
+    },
+    {
+      "text": "योग",
+      "expected_phonemes": "/joːg/",
+      "description": "Palatal approximant initial",
+      "tags": ["palatal"],
+      "notes": "Transliteration: yoga. Starts with palatal approximant /j/."
+    },
+    {
+      "text": "शहर",
+      "expected_phonemes": "/ʃəhər/",
+      "description": "Voiceless palatal fricative",
+      "tags": ["palatal"],
+      "notes": "Transliteration: shahar. Begins with voiceless palatal fricative /ʃ/."
+    },
+    {
+      "text": "बिल्ली",
+      "expected_phonemes": "/bɪlliː/",
+      "description": "Geminate liquids",
+      "tags": ["geminate_consonants", "liquids"],
+      "notes": "Transliteration: billī. Double 'l' creates geminate liquid. Final vowel is long."
+    },
+    {
+      "text": "धन्यवाद",
+      "expected_phonemes": "/dʰənjəvaːd/",
+      "description": "Aspirated consonant initial",
+      "tags": ["aspiration"],
+      "notes": "Transliteration: dhanyavād. Initial /dʰ/ is aspirated. Includes schwa deletion."
+    },
+    {
+      "text": "अस्पताल",
+      "expected_phonemes": "/əspəताːl/",
+      "description": "Medial consonant clusters",
+      "tags": ["consonant_clusters", "schwa_deletion"],
+      "notes": "Transliteration: aspatāl. Complex consonant cluster handling with schwa before /t/."
+    }
+  ]
+}
