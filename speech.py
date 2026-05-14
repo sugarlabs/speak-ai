@@ -326,6 +326,7 @@ class Speech(GstSpeechPlayer):
 
     def _stream_kokoro_audio(self, text, voice):
         """Stream Kokoro audio chunks to the GStreamer pipeline"""
+        appsrc = None # Initialize before try block to prevent UnboundLocalError
         try:
             # Getting the appsrc element
             appsrc = self.pipeline.get_by_name('kokoro_src')
@@ -360,7 +361,7 @@ class Speech(GstSpeechPlayer):
         except Exception as e:
             # Signalling EOS here as well, but I'm adding error to logs
             logger.error(f"Error in Kokoro audio streaming: {e}")
-            if appsrc:
+            if appsrc is not None:
                 appsrc.emit("end-of-stream")
 
     def speak(self, status, text):
