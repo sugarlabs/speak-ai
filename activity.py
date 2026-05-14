@@ -1067,23 +1067,41 @@ class SpeakActivity(activity.Activity):
             logger.warning(f"Persona voice {persona_voice_name} not found in available Kokoro voices")
 
     def _photo_face_cb(self, widget):
-        chooser = ObjectChooser(parent=self,
-                                what_filter=mime.GENERIC_TYPE_IMAGE)
+        try:
+            chooser = ObjectChooser(parent=self,
+                                    what_filter=mime.GENERIC_TYPE_IMAGE)
+        except Exception as e:
+            logger.warning(f"Could not open photo chooser: {e}")
+            from gi.repository import Gtk as _Gtk
+            dialog = _Gtk.MessageDialog(
+                parent=self,
+                flags=0,
+                message_type=_Gtk.MessageType.WARNING,
+                buttons=_Gtk.ButtonsType.OK,
+                text=_("Photo selection is not available in this environment.")
+            )
+            dialog.run()
+            dialog.destroy()
+            return
 
-        result = chooser.run()
-        if result == Gtk.ResponseType.ACCEPT:
-            jobject = chooser.get_selected_object()
-            if jobject and jobject.file_path:
-                selector = FaceSelector(jobject.file_path)
-                selector.connect('face-processed',
-                                 self._photo_face_processed_cb)
-                selector.connect('cancel', self._photo_face_cancel_cb)
-                self._notebook.append_page(selector, Gtk.Label(''))
-                selector.show()
+        try:
+            result = chooser.run()
+            if result == Gtk.ResponseType.ACCEPT:
+                jobject = chooser.get_selected_object()
+                if jobject and jobject.file_path:
+                    selector = FaceSelector(jobject.file_path)
+                    selector.connect('face-processed',
+                                     self._photo_face_processed_cb)
+                    selector.connect('cancel', self._photo_face_cancel_cb)
+                    self._notebook.append_page(selector, Gtk.Label(''))
+                    selector.show()
 
-                num = self._notebook.page_num(selector)
-                self._notebook.set_current_page(num)
-        chooser.destroy()
+                    num = self._notebook.page_num(selector)
+                    self._notebook.set_current_page(num)
+        except Exception as e:
+            logger.warning(f"Error during photo selection: {e}")
+        finally:
+            chooser.destroy()
 
     def _photo_face_processed_cb(self, widget, *face_data):
         lighter = style.Color(self._colors[_lighter_color(self._colors)])
