@@ -25,6 +25,7 @@
 import logging
 import os
 import dbus
+import dbus.exceptions
 import subprocess
 import json
 import random
@@ -58,6 +59,7 @@ from sugar3.graphics.toolbarbox import ToolbarBox, ToolbarButton
 from sugar3.activity.widgets import ActivityToolbarButton
 from sugar3.activity.widgets import StopButton
 from sugar3.graphics.objectchooser import ObjectChooser
+from sugar3.graphics.alert import NotifyAlert
 
 from sugar3 import mime
 from sugar3 import profile
@@ -1070,21 +1072,6 @@ class SpeakActivity(activity.Activity):
         try:
             chooser = ObjectChooser(parent=self,
                                     what_filter=mime.GENERIC_TYPE_IMAGE)
-        except Exception as e:
-            logger.warning(f"Could not open photo chooser: {e}")
-            from gi.repository import Gtk as _Gtk
-            dialog = _Gtk.MessageDialog(
-                parent=self,
-                flags=0,
-                message_type=_Gtk.MessageType.WARNING,
-                buttons=_Gtk.ButtonsType.OK,
-                text=_("Photo selection is not available in this environment.")
-            )
-            dialog.run()
-            dialog.destroy()
-            return
-
-        try:
             result = chooser.run()
             if result == Gtk.ResponseType.ACCEPT:
                 jobject = chooser.get_selected_object()
@@ -1095,13 +1082,22 @@ class SpeakActivity(activity.Activity):
                     selector.connect('cancel', self._photo_face_cancel_cb)
                     self._notebook.append_page(selector, Gtk.Label(''))
                     selector.show()
-
                     num = self._notebook.page_num(selector)
                     self._notebook.set_current_page(num)
-        except Exception as e:
-            logger.warning(f"Error during photo selection: {e}")
+        except dbus.exceptions.DBusException as e:
+            logger.warning(f"Could not open photo chooser: {e}")
+            alert = NotifyAlert()
+            alert.props.title = _('Photo Selection Unavailable')
+            alert.props.msg = _('Photo selection is not available'
+                                ' in this environment.')
+            alert.connect('response', lambda a, r: self.remove_alert(a))
+            self.add_alert(alert)
+            alert.show()
         finally:
-            chooser.destroy()
+            try:
+                chooser.destroy()
+            except Exception:
+                pass
 
     def _photo_face_processed_cb(self, widget, *face_data):
         lighter = style.Color(self._colors[_lighter_color(self._colors)])
