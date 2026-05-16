@@ -6,3 +6,4 @@ numpy
 torch
 transformers
 requests
+pyspellchecker
