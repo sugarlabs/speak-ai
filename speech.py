@@ -55,6 +55,7 @@ class Speech(GstSpeechPlayer):
         
         # Initialize Kokoro pipeline if available
         self.kokoro_pipeline = None
+        self.kokoro_ready = threading.Event()
         if KOKORO_AVAILABLE:
             threading.Thread(target=self.setup_kokoro).start()
         
@@ -78,6 +79,7 @@ class Speech(GstSpeechPlayer):
 
     def setup_kokoro(self):
         self.kokoro_pipeline = KPipeline(lang_code='a')
+        self.kokoro_ready.set()
 
     def disconnect_all(self):
         for cb in ['peak', 'wave', 'idle']:
@@ -326,45 +328,42 @@ class Speech(GstSpeechPlayer):
 
     def _stream_kokoro_audio(self, text, voice):
         """Stream Kokoro audio chunks to the GStreamer pipeline"""
+        appsrc = None
         try:
-            # Getting the appsrc element
             appsrc = self.pipeline.get_by_name('kokoro_src')
             if not appsrc:
                 logger.error("Could not find kokoro_src element")
                 return
             
-            # Set caps for Kokoro audio
             caps = Gst.Caps.from_string(
                 "audio/x-raw,format=F32LE,layout=interleaved,rate=24000,channels=1"
             )
             appsrc.set_property("caps", caps)
-
-            audio_generator = self.kokoro_pipeline(text, voice=voice) # actual audio generation by kokoro
-
-            # Stream audio chunks
+    
+            audio_generator = self.kokoro_pipeline(text, voice=voice)
+    
             for i, (gs, ps, audio_chunk) in enumerate(audio_generator):
-                # Convert tensor to numpy array then to bytes
                 data_bytes = audio_chunk.numpy().tobytes()
-                
-                # Create GStreamer buffer
                 buf = Gst.Buffer.new_wrapped(data_bytes)
-                
-                # Push buffer to appsrc
+    
                 ret = appsrc.emit("push-buffer", buf)
                 if ret != Gst.FlowReturn.OK:
                     logger.error(f"Error pushing buffer {i} to GStreamer")
                     break
-
-            appsrc.emit("end-of-stream") # Signal EOS
-            
+    
+            if appsrc:
+                appsrc.emit("end-of-stream")
+    
         except Exception as e:
-            # Signalling EOS here as well, but I'm adding error to logs
             logger.error(f"Error in Kokoro audio streaming: {e}")
             if appsrc:
                 appsrc.emit("end-of-stream")
 
     def speak(self, status, text):
         self.make_pipeline()
+
+        if KOKORO_AVAILABLE and not self.kokoro_ready.is_set():
+            self.kokoro_ready.wait(timeout=5)
         
         if KOKORO_AVAILABLE and self.kokoro_pipeline:
             logger.debug('Using Kokoro TTS: voice=%s text=%s' % (self.current_kokoro_voice, text))
