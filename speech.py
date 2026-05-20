@@ -326,6 +326,11 @@ class Speech(GstSpeechPlayer):
 
     def _stream_kokoro_audio(self, text, voice):
         """Stream Kokoro audio chunks to the GStreamer pipeline"""
+
+        if not self.kokoro_pipeline:
+            logger.error("Kokoro pipeline not initialized")
+            return
+        
         try:
             # Getting the appsrc element
             appsrc = self.pipeline.get_by_name('kokoro_src')
