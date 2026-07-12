@@ -2,3 +2,6 @@ dist
 .0sugar
 *~
 *.pyc
+tests/evaluation/wav/
+tests/evaluation/*_report.json
+tests/evaluation/*_summary.txt

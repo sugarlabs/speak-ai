@@ -9,15 +9,19 @@ import torch
 import os
 
 ALIASES = {
-    'en-us': 'a',
-    'en-gb': 'b',
-    'es': 'e',
-    'fr-fr': 'f',
-    'hi': 'h',
-    'it': 'i',
-    'pt-br': 'p',
-    'ja': 'j',
-    'zh': 'z',
+    'en-us': 'a',   # American English
+    'en-gb': 'b',   # British English
+    'es': 'e',      # Spanish
+    'fr-fr': 'f',   # French
+    'hi': 'h',      # Hindi
+    'it': 'i',      # Italian
+    'pt-br': 'p',   # Portuguese (Brazil)
+    'ja': 'j',      # Japanese
+    'zh': 'z',      # Mandarin Chinese
+    'ar': 'r',      # Arabic
+    'sw': 'w',      # Swahili
+    'qu': 'q',      # Quechua
+    'gn': 'g',      # Guarani
 }
 
 LANG_CODES = dict(
@@ -26,11 +30,15 @@ LANG_CODES = dict(
     b='British English',
 
     # espeak-ng
-    e='es',
-    f='fr-fr',
-    h='hi',
-    i='it',
-    p='pt-br',
+    e='es',       # Spanish
+    f='fr-fr',    # French
+    h='hi',       # Hindi
+    i='it',       # Italian
+    p='pt-br',    # Portuguese (Brazil)
+    r='ar',       # Arabic
+    w='sw',       # Swahili
+    q='qu',       # Quechua
+    g='gn',       # Guarani
 
     # pip install misaki[ja]
     j='Japanese',
