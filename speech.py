@@ -18,7 +18,9 @@
 
 import numpy
 import queue
+import re
 import threading
+import time
 from typing import List, Optional
 
 from gi.repository import Gst
@@ -115,11 +117,13 @@ def _detect_language(text: str, lang_code: str = None) -> str:
         dominant = max(script_counts, key=script_counts.get)
         return dominant
 
-    text_lower = text.lower()
+    # Match hint words as whole tokens, not substrings — otherwise e.g. the
+    # Guarani hint "gua" matches inside the English word "languages".
+    tokens = set(re.findall(r"[^\W\d_]+", text.lower(), flags=re.UNICODE))
     best_lang = 'en-us'
     best_score = 0
     for lang, words in _LATIN_HINTS.items():
-        score = sum(1 for w in words if w in text_lower)
+        score = sum(1 for w in words if w in tokens)
         if score > best_score:
             best_score = score
             best_lang = lang
@@ -212,6 +216,9 @@ class Speech(GstSpeechPlayer):
         'peak': (GObject.SIGNAL_RUN_FIRST, None, [GObject.TYPE_PYOBJECT]),
         'wave': (GObject.SIGNAL_RUN_FIRST, None, [GObject.TYPE_PYOBJECT]),
         'idle': (GObject.SIGNAL_RUN_FIRST, None, []),
+        # (start_char, end_char) into the spoken text, for a karaoke-style
+        # current-word highlight. (-1, -1) means "clear the highlight".
+        'word': (GObject.SIGNAL_RUN_FIRST, None, [GObject.TYPE_INT, GObject.TYPE_INT]),
     }
 
     def __init__(self):
@@ -219,6 +226,9 @@ class Speech(GstSpeechPlayer):
         self.pipeline = None
 
         self.kokoro_pipeline = None
+        self._kokoro_model = None
+        self._kokoro_pipelines = {}
+        self._kokoro_pipelines_lock = threading.Lock()
         self._kokoro_ready = threading.Event()
         self._kokoro_failed = False
         if KOKORO_AVAILABLE:
@@ -254,8 +264,21 @@ class Speech(GstSpeechPlayer):
             'gn': 'hf_alpha', 'rw': 'hf_alpha', 'ay': 'hf_alpha',
         }
 
+        # Detected language -> (kokoro pipeline lang_code, default voice).
+        # Mirrors tests/evaluation/common.py so live TTS matches the demo WAVs.
+        self._kokoro_lang_map = {
+            'en-us': ('a', 'af_heart'), 'en-gb': ('a', 'af_heart'),
+            'es': ('e', 'ef_dora'), 'fr': ('f', 'ff_siwis'),
+            'hi': ('h', 'hf_alpha'), 'pt-br': ('p', 'pf_dora'),
+            'zh': ('z', 'zf_xiaoxiao'), 'ja': ('j', 'jf_alpha'),
+            'it': ('i', 'if_sara'),
+            'ar': ('r', 'hf_alpha'), 'sw': ('w', 'hf_alpha'),
+            'qu': ('q', 'hf_alpha'), 'gn': ('g', 'hf_alpha'),
+        }
+
         self._backend_failures = {}
         self._backend_lock = threading.Lock()
+        self._speak_lock = threading.Lock()
 
         self._preload_queue = queue.Queue()
         self._preload_worker_running = False
@@ -282,11 +305,27 @@ class Speech(GstSpeechPlayer):
 
     def _setup_kokoro(self):
         try:
+            # Load the model once via the English pipeline; every other
+            # language reuses this model with its own lang_code (g2p).
             self.kokoro_pipeline = KPipeline(lang_code='a')
+            self._kokoro_model = self.kokoro_pipeline.model
+            with self._kokoro_pipelines_lock:
+                self._kokoro_pipelines['a'] = self.kokoro_pipeline
             self._kokoro_ready.set()
         except Exception as e:
             logger.error(f"Failed to initialize Kokoro: {e}")
             self._kokoro_failed = True
+
+    def _get_kokoro_pipeline(self, pl_code: str):
+        """Return a KPipeline for the given lang_code, creating it lazily and
+        sharing the single loaded model (matches tests/evaluation pattern)."""
+        with self._kokoro_pipelines_lock:
+            pipe = self._kokoro_pipelines.get(pl_code)
+            if pipe is not None:
+                return pipe
+            pipe = KPipeline(lang_code=pl_code, model=self._kokoro_model)
+            self._kokoro_pipelines[pl_code] = pipe
+            return pipe
 
     def preload_backend(self, lang_code: str):
         self._preload_queue.put(lang_code)
@@ -336,6 +375,102 @@ class Speech(GstSpeechPlayer):
 
     def connect_idle(self, cb):
         self._cb['idle'] = self.connect('idle', cb)
+
+    def _emit_peak_wave(self, wave_i16, peak_val):
+        self.emit("wave", wave_i16)
+        self.emit("peak", peak_val)
+        return False
+
+    def _emit_idle(self):
+        self.emit("idle")
+        return False
+
+    def _schedule_mouth_from_waveform(self, wave_np, sr, anchor: float, chunk_start_offset: float):
+        """Schedule 'peak'/'wave' mouth-animation events for one already
+        real-time-paced audio chunk, at absolute wall-clock offsets from
+        `anchor` (a time.monotonic() reference shared across the whole
+        utterance).
+
+        This replaces relying on the GStreamer fakesink 'handoff' signal for
+        mouth timing: that branch runs down its own independent tee/queue,
+        decoupled from the autoaudiosink branch that's actually audible, and
+        in practice drains faster — so the mouth would stop animating up to
+        ~1s before the real sound finished. Driving the animation directly
+        from the same samples/timing used to pace real playback keeps it in
+        sync with what's actually heard, regardless of backend.
+        """
+        chunk_ms = _NS_PER_CHUNK / 1_000_000.0
+        step = max(int(sr * chunk_ms / 1000.0), 1)
+        n = len(wave_np)
+        is_float = numpy.issubdtype(wave_np.dtype, numpy.floating)
+        for i in range(0, n, step):
+            sub = wave_np[i:i + step]
+            if len(sub) == 0:
+                continue
+            if is_float:
+                wave_i16 = numpy.clip(sub * 32767.0, -32768, 32767).astype(numpy.int16)
+            else:
+                wave_i16 = sub.astype(numpy.int16)
+            peak_val = int(numpy.max(numpy.abs(wave_i16))) if len(wave_i16) else 0
+            target = anchor + chunk_start_offset + i / float(sr)
+            delay_ms = max(0, int((target - time.monotonic()) * 1000))
+            GLib.timeout_add(delay_ms, self._emit_peak_wave, wave_i16, peak_val)
+
+    def _schedule_idle_at(self, anchor: float, offset: float):
+        target = anchor + offset
+        delay_ms = max(0, int((target - time.monotonic()) * 1000))
+        GLib.timeout_add(delay_ms, self._emit_idle)
+
+    @staticmethod
+    def _find_words(segment: str):
+        """Return [(start, end), ...] character spans of whitespace-separated
+        words within `segment` (local to that string)."""
+        words = []
+        i, n = 0, len(segment)
+        while i < n:
+            while i < n and segment[i].isspace():
+                i += 1
+            start = i
+            while i < n and not segment[i].isspace():
+                i += 1
+            if i > start:
+                words.append((start, i))
+        return words
+
+    def _emit_word(self, start, end):
+        self.emit("word", start, end)
+        return False
+
+    def _schedule_word_highlights(self, segment: str, base_offset: int,
+                                   anchor: float, chunk_start_offset: float,
+                                   chunk_duration: float):
+        """Estimate per-word timing within one chunk of text (proportional
+        to word length vs. that chunk's real synthesized duration) and
+        schedule 'word' emissions with GLOBAL character offsets (base_offset
+        + local position) so the UI can highlight the matching span in the
+        full text entry. This is an estimate, not true phoneme alignment —
+        it's the only thing that works identically across every backend
+        (Kokoro or MMS), since none of them expose per-word timing here.
+        """
+        words = self._find_words(segment)
+        if not words:
+            return
+        total_chars = sum(end - start for start, end in words)
+        if total_chars <= 0:
+            return
+        t = 0.0
+        for start, end in words:
+            word_dur = chunk_duration * (end - start) / total_chars
+            target = anchor + chunk_start_offset + t
+            delay_ms = max(0, int((target - time.monotonic()) * 1000))
+            GLib.timeout_add(
+                delay_ms, self._emit_word, base_offset + start, base_offset + end)
+            t += word_dur
+
+    def _schedule_word_clear_at(self, anchor: float, offset: float):
+        target = anchor + offset
+        delay_ms = max(0, int((target - time.monotonic()) * 1000))
+        GLib.timeout_add(delay_ms, self._emit_word, -1, -1)
 
     def set_kokoro_voice(self, voice_name: str):
         if voice_name in self.kokoro_voices:
@@ -430,17 +565,28 @@ class Speech(GstSpeechPlayer):
                 'audio/x-raw,channels=(int)1,depth=(int)16'
             ))
 
-        handoff_cb = _make_handoff_cb(self, sample_rate)
-        sink = self.pipeline.get_by_name('sink')
-        sink.props.signal_handoffs = True
-        sink.connect('handoff', handoff_cb)
+        # Only wire the fakesink 'handoff' analysis for the espeak path (a
+        # genuinely live GStreamer source with no other timing information
+        # available). The appsrc-based paths (kokoro_src/audio_src) drive the
+        # mouth directly from _schedule_mouth_from_waveform instead, using
+        # the same real-time-paced samples that get pushed for playback; if
+        # this handoff were ALSO connected for them, both mechanisms would
+        # emit 'peak'/'wave' concurrently and race each other, making the
+        # mouth flicker between two independently-computed values instead of
+        # tracking the actual sound.
+        if source_name == 'espeak':
+            handoff_cb = _make_handoff_cb(self, sample_rate)
+            sink = self.pipeline.get_by_name('sink')
+            sink.props.signal_handoffs = True
+            sink.connect('handoff', handoff_cb)
 
         self._was_message.clear()
         bus = self.pipeline.get_bus()
         bus.add_signal_watch()
         self._gst_handler_id = bus.connect('message', self._on_gst_message)
 
-    def _push_waveform_to_appsrc(self, waveform: numpy.ndarray, sr: int) -> Optional[numpy.ndarray]:
+    def _push_waveform_to_appsrc(self, waveform: numpy.ndarray, sr: int,
+                                  text: str = "") -> Optional[numpy.ndarray]:
         appsrc = None
         try:
             appsrc = self.pipeline.get_by_name('kokoro_src') or self.pipeline.get_by_name('audio_src')
@@ -458,6 +604,18 @@ class Speech(GstSpeechPlayer):
             total_samples = len(waveform)
             offset = 0
 
+            # Alt-backend waveforms arrive fully computed (no natural
+            # per-chunk delay like Kokoro's generator), so pace pushes to
+            # real playback time and drive the mouth directly from these
+            # same samples/timings — see _schedule_mouth_from_waveform for
+            # why relying on the GStreamer fakesink 'handoff' signal cuts
+            # the animation short instead.
+            chunk_seconds = chunk_samples / float(sr)
+            start = time.monotonic()
+            total_seconds = total_samples / float(sr)
+            if text:
+                self._schedule_word_highlights(text, 0, start, 0.0, total_seconds)
+
             while offset < total_samples:
                 end = min(offset + chunk_samples, total_samples)
                 chunk = waveform[offset:end]
@@ -466,9 +624,16 @@ class Speech(GstSpeechPlayer):
                 if ret != Gst.FlowReturn.OK:
                     logger.error("Error pushing buffer to GStreamer")
                     break
+                self._schedule_mouth_from_waveform(
+                    chunk, sr, start, offset / float(sr))
                 offset = end
+                if offset < total_samples:
+                    time.sleep(chunk_seconds)
 
             appsrc.emit("end-of-stream")
+            self._schedule_idle_at(start, total_seconds)
+            if text:
+                self._schedule_word_clear_at(start, total_seconds)
             return waveform
 
         except Exception as e:
@@ -480,9 +645,11 @@ class Speech(GstSpeechPlayer):
                     pass
             return None
 
-    def _stream_kokoro_audio(self, text: str, voice: str) -> List[numpy.ndarray]:
+    def _stream_kokoro_audio(self, text: str, voice: str,
+                             pl_code: str = 'a') -> List[numpy.ndarray]:
         waveform_chunks = []
         try:
+            pipeline = self._get_kokoro_pipeline(pl_code)
             self._build_pipeline('kokoro_src', _KOKORO_SR)
             appsrc = self.pipeline.get_by_name('kokoro_src')
             if not appsrc:
@@ -494,7 +661,24 @@ class Speech(GstSpeechPlayer):
             )
             appsrc.set_property("caps", caps)
 
-            for gs, ps, audio_chunk in self.kokoro_pipeline(text, voice=voice):
+            # Start the pipeline before pushing buffers, otherwise the audio
+            # is generated but never reaches the sink (silent playback).
+            self.restart_sound_device()
+
+            # Real-time throttle + mouth scheduling, anchored to the moment
+            # audio actually starts flowing (not when we started waiting for
+            # Kokoro to synthesize it — that per-chunk CPU synthesis time can
+            # itself be over a second, and counting it as elapsed "playback"
+            # time made every later sub-window's target already in the past,
+            # clamping them to fire in an instant burst instead of spread out
+            # — which is also why the mouth used to stop noticeably before
+            # the audio actually finished playing.
+            start = None
+            pushed_seconds = 0.0
+            lead = 0.30  # stay this far ahead of playback
+            text_cursor = 0  # where to resume searching for each chunk's text in `text`
+
+            for gs, ps, audio_chunk in pipeline(text, voice=voice):
                 wave_np = audio_chunk.numpy()
                 waveform_chunks.append(wave_np)
                 buf = Gst.Buffer.new_wrapped(wave_np.tobytes())
@@ -502,8 +686,26 @@ class Speech(GstSpeechPlayer):
                 if ret != Gst.FlowReturn.OK:
                     logger.error("Error pushing buffer to GStreamer")
                     break
+                if start is None:
+                    start = time.monotonic()
+                self._schedule_mouth_from_waveform(
+                    wave_np, _KOKORO_SR, start, pushed_seconds)
+                chunk_duration = len(wave_np) / float(_KOKORO_SR)
+                if gs:
+                    found = text.find(gs.strip(), text_cursor) if gs.strip() else -1
+                    if found != -1:
+                        self._schedule_word_highlights(
+                            gs, found, start, pushed_seconds, chunk_duration)
+                        text_cursor = found + len(gs.strip())
+                pushed_seconds += chunk_duration
+                ahead = pushed_seconds - (time.monotonic() - start)
+                if ahead > lead:
+                    time.sleep(ahead - lead)
 
             appsrc.emit("end-of-stream")
+            if start is not None:
+                self._schedule_idle_at(start, pushed_seconds)
+                self._schedule_word_clear_at(start, pushed_seconds)
             return waveform_chunks
 
         except Exception as e:
@@ -550,16 +752,74 @@ class Speech(GstSpeechPlayer):
             self._backend_failures.pop(lang_code, None)
 
     def speak(self, status, text: str):
+        # Runs the real work on a background thread. speak() used to block
+        # the caller (GTK main thread) for the whole synthesis+playback
+        # duration, which starves the GLib.timeout_add-scheduled 'peak'/'wave'
+        # emissions that drive the mouth animation — audio kept playing
+        # (GStreamer has its own streaming threads) but the mouth froze until
+        # everything finished, then caught up in one burst. Moving synthesis
+        # off the main thread lets those timers fire in real time instead.
+        threading.Thread(
+            target=self._speak_worker, args=(status, text), daemon=True
+        ).start()
+
+    def _speak_worker(self, status, text: str):
+        with self._speak_lock:
+            self._speak_impl(status, text)
+
+    def _speak_impl(self, status, text: str):
         try:
+            if not text or not text.strip():
+                return
+            text = text.strip()
+
+            detected = _detect_language(text)
+            pl_code, mapped_voice = self._kokoro_lang_map.get(detected, (None, None))
+
+            # 1. Dedicated backend (Piper/MMS) where a language prefers one.
+            backend = self._get_backend_for_lang(detected)
+            if backend is not None:
+                try:
+                    sr = backend.sample_rate
+                    self._current_sample_rate = sr
+                    self._current_backend_type = type(backend).__name__
+                    self._build_pipeline('audio_src', sr)
+                    self.restart_sound_device()
+                    waveform, actual_sr = backend.synthesize(text)
+                    if waveform is not None and len(waveform) > 0:
+                        self._push_waveform_to_appsrc(
+                            waveform, int(actual_sr) if actual_sr else int(sr), text)
+                        self._record_backend_success(detected)
+                        logger.debug(f"Speaking via {backend} for lang={detected}")
+                        return
+                    self._record_backend_failure(detected)
+                except Exception as e:
+                    logger.warning(f"Alt backend failed for {detected}: {e}")
+                    self._record_backend_failure(detected)
+
+            # 2. Kokoro with the language-appropriate pipeline and voice.
+            if (KOKORO_AVAILABLE and not self._kokoro_failed
+                    and pl_code is not None):
+                try:
+                    self._kokoro_ready.wait(timeout=30)
+                    if self._kokoro_model is not None:
+                        # English respects the user/persona-selected voice;
+                        # other languages use their mapped native voice.
+                        voice = (self.current_kokoro_voice if pl_code == 'a'
+                                 else mapped_voice)
+                        self._current_sample_rate = _KOKORO_SR
+                        self._current_backend_type = 'kokoro'
+                        if self._stream_kokoro_audio(text, voice, pl_code):
+                            logger.debug(
+                                f"Speaking via Kokoro ({voice}, pl={pl_code}) "
+                                f"for lang={detected}")
+                            return
+                except Exception as e:
+                    logger.warning(f"Kokoro failed for {detected}: {e}")
+
+            # 3. espeak fallback (unsupported language or Kokoro unavailable).
             self._build_pipeline('espeak', _ESPEAK_SR)
             self.restart_sound_device()
-
-            if KOKORO_AVAILABLE and self.kokoro_pipeline and not self._kokoro_failed:
-                self._kokoro_ready.wait(timeout=5)
-                if self.kokoro_pipeline:
-                    self._stream_kokoro_audio(text, self.current_kokoro_voice)
-                    return
-
             src = self.pipeline.get_by_name('espeak')
             if src:
                 src.props.pitch = int(status.pitch) - 100
@@ -567,6 +827,7 @@ class Speech(GstSpeechPlayer):
                 src.props.voice = status.voice.name
                 src.props.track = 1
                 src.props.text = text
+            logger.debug(f"Speaking via espeak for lang={detected}")
         except Exception as e:
             logger.error(f"Error in speak: {e}")
 
@@ -616,14 +877,17 @@ class Speech(GstSpeechPlayer):
                 logger.warning(f"Alt backend failed for {detected}: {e}")
                 self._record_backend_failure(detected)
 
-        if KOKORO_AVAILABLE and self.kokoro_pipeline and not self._kokoro_failed:
+        if KOKORO_AVAILABLE and not self._kokoro_failed:
             try:
-                self._kokoro_ready.wait(timeout=5)
-                if self.kokoro_pipeline:
-                    kokoro_voice = voice or self._lang_voice_map.get(detected, self.current_kokoro_voice)
+                self._kokoro_ready.wait(timeout=30)
+                if self._kokoro_model is not None:
+                    pl_code, mapped_voice = self._kokoro_lang_map.get(
+                        detected, ('a', self.current_kokoro_voice))
+                    kokoro_voice = voice or mapped_voice
                     self._current_sample_rate = _KOKORO_SR
                     self._current_backend_type = 'kokoro'
-                    waveform_chunks = self._stream_kokoro_audio(text, kokoro_voice)
+                    waveform_chunks = self._stream_kokoro_audio(
+                        text, kokoro_voice, pl_code)
                     if waveform_chunks:
                         if self._tts_cache is not None:
                             try:

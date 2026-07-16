@@ -22,8 +22,10 @@
 #     You should have received a copy of the GNU General Public License
 #     along with Speak.activity.  If not, see <http://www.gnu.org/licenses/>.
 
+import sys
 import logging
 import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dbus
 import subprocess
 import json
@@ -231,6 +233,8 @@ class SpeakActivity(activity.Activity):
         self._entry.connect('key-press-event', self._entry_key_press_cb)
         self._entry.modify_font(Pango.FontDescription('sans bold 24'))
         self._entry_box.show()
+
+        speech.get_speech().connect('word', self.__word_highlight_cb)
 
         self.face = face.View(fill_color=lighter)
         self._cartoon_face = self.face
@@ -1271,6 +1275,16 @@ class SpeakActivity(activity.Activity):
     def _dismiss_OSK(self, entry):
         entry.hide()
         entry.show()
+
+    def __word_highlight_cb(self, audio, start, end):
+        # (-1, -1) means "clear" — leave the whole utterance selected,
+        # matching the resting state _speak_the_text already sets.
+        if start < 0 or end < 0:
+            self._entry.select_region(0, -1)
+            return
+        text_len = len(self._entry.get_text())
+        if 0 <= start <= text_len and 0 <= end <= text_len:
+            self._entry.select_region(start, end)
 
     def _talk_cb(self, button):
         text = self._entry.props.text
