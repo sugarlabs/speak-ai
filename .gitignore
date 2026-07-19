@@ -5,3 +5,13 @@ dist
 tests/evaluation/wav/
 tests/evaluation/*_report.json
 tests/evaluation/*_summary.txt
+API_KEY.txt
+
+# Generated ONNX artefacts — reproduce with scripts/export_onnx.py, never track
+# (the fp32 export is ~310 MiB). Downloaded models live outside the repo.
+kokoro.onnx
+kokoro_int8.onnx
+*.onnx
+models/
+.tts_cache/
+profile.json
