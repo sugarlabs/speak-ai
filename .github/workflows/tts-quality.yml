@@ -1,0 +1,89 @@
+name: TTS quality gate
+
+# Guards the pieces of the pipeline that decide how a child's language gets
+# pronounced. Deliberately espeak-only: no torch, no model weights, no GPU.
+# Kokoro needs ~1.5 GB RSS and several seconds to load, which is more than a
+# standard runner should be asked to do on every push. Synthesis *quality* is
+# demonstrated by the contributor with generated WAVs and the scoring rubric;
+# what CI defends is that G2P and routing did not regress underneath it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'speech.py'
+      - 'kokoro/pipeline.py'
+      - 'alt_tts_backends.py'
+      - 'tts_cache.py'
+      - 'model_manager.py'
+      - 'MANIFEST.json'
+      - 'tests/**'
+      - '.github/workflows/tts-quality.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install flake8
+        run: pip install flake8
+
+      # Reads .flake8 from the repo root. Note it uses extend-ignore, not
+      # ignore: plain `ignore` would replace flake8's default ignore list and
+      # silently re-enable cosmetic checks nobody intended to enforce.
+      - name: Lint
+        run: flake8 speech.py tts_cache.py alt_tts_backends.py model_manager.py tests/
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # The espeak-ng binary plus its data files. misaki's espeak backend
+      # shells out to this, so the apt package is a hard requirement even
+      # though espeakng_loader ships a copy of the data path.
+      - name: Install espeak-ng
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y espeak-ng
+
+      - name: Install Python dependencies
+        run: |
+          pip install pytest numpy psutil
+          pip install misaki phonemizer espeakng_loader num2words
+
+      # Language registration + espeak G2P reachability. Reads the alias tables
+      # with ast (no torch import) and phonemises through espeak directly.
+      # Finishes in under a second.
+      - name: Language aliases + G2P coverage
+        run: pytest tests/evaluation/test_language_aliases.py -q
+
+      # Cache correctness: LRU eviction, SHA-256 keying, atomic writes.
+      # Pure numpy, no synthesis.
+      - name: Audio cache
+        run: pytest tests/evaluation/test_tts_cache.py -q
+
+      # Backend routing: which engine a language resolves to, with the
+      # heavy backends mocked out.
+      - name: Backend routing
+        run: pytest tests/evaluation/test_alt_backends.py -q
+
+      # Offline-first model handling: checksum rejection, atomic rename,
+      # low-RAM guard. Serves fixtures over localhost, so no network.
+      - name: Model manager
+        run: pytest tests/evaluation/test_model_manager.py -q
