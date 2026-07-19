@@ -45,7 +45,7 @@ def main():
         try:
             sents = load_corpus(lang)
         except FileNotFoundError:
-            print(f"  skip: no corpus")
+            print("  skip: no corpus")
             continue
 
         freq = Counter()

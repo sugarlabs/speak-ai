@@ -442,8 +442,8 @@ class Speech(GstSpeechPlayer):
         return False
 
     def _schedule_word_highlights(self, segment: str, base_offset: int,
-                                   anchor: float, chunk_start_offset: float,
-                                   chunk_duration: float):
+                                  anchor: float, chunk_start_offset: float,
+                                  chunk_duration: float):
         """Estimate per-word timing within one chunk of text (proportional
         to word length vs. that chunk's real synthesized duration) and
         schedule 'word' emissions with GLOBAL character offsets (base_offset
@@ -586,7 +586,7 @@ class Speech(GstSpeechPlayer):
         self._gst_handler_id = bus.connect('message', self._on_gst_message)
 
     def _push_waveform_to_appsrc(self, waveform: numpy.ndarray, sr: int,
-                                  text: str = "") -> Optional[numpy.ndarray]:
+                                 text: str = "") -> Optional[numpy.ndarray]:
         appsrc = None
         try:
             appsrc = self.pipeline.get_by_name('kokoro_src') or self.pipeline.get_by_name('audio_src')
