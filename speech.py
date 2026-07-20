@@ -28,6 +28,32 @@ logger = logging.getLogger('speak')
 
 from sugar3.speech import GstSpeechPlayer
 
+# Spell checker for child users
+try:
+    from spellchecker import SpellChecker
+    SPELLCHECKER_AVAILABLE = True
+except ImportError:
+    SPELLCHECKER_AVAILABLE = False
+
+
+def correct_spelling(text, lang='en'):
+    """Correct invented spellings for child users before TTS processing."""
+    if not SPELLCHECKER_AVAILABLE:
+        return text
+    try:
+        spell = SpellChecker(language=lang)
+        words = text.split()
+        corrected = []
+        for word in words:
+            correction = spell.correction(word)
+            if correction and correction != word:
+                corrected.append(correction)
+            else:
+                corrected.append(word)
+        return ' '.join(corrected)
+    except Exception:
+        return text 
+
 # Kokoro TTS imports
 try:
     from kokoro import KPipeline
@@ -366,6 +392,8 @@ class Speech(GstSpeechPlayer):
 
     def speak(self, status, text):
         self.make_pipeline()
+        # Correct invented spellings for child users before TTS
+        text = correct_spelling(text)
         
         if KOKORO_AVAILABLE and self.kokoro_pipeline:
             logger.debug('Using Kokoro TTS: voice=%s text=%s' % (self.current_kokoro_voice, text))
