@@ -521,6 +521,23 @@ class Speech(GstSpeechPlayer):
             return self._tts_cache.stats
         return {'entries': 0, 'disk_mb': 0, 'disk_bytes': 0}
 
+    def _cache_voice_key(self, detected: str, pl_code, backend) -> str:
+        """The voice slot for a cache entry.
+
+        The get and the put have to agree on this or the cache never hits. It
+        has to capture whatever actually changes the audio: for Kokoro that's
+        the voice embedding, for an alt backend it's which backend (one per
+        language, so the class name is enough). Computing it in one place is
+        the whole point, since the original bug was the lookup keying on the
+        voice name while the store keyed on the literal 'kokoro'.
+        """
+        if backend is not None:
+            return type(backend).__name__
+        if pl_code == 'a':
+            return self.current_kokoro_voice
+        mapped = self._kokoro_lang_map.get(detected, (None, None))[1]
+        return mapped or self._lang_voice_map.get(detected, 'af_heart')
+
     def clear_cache(self):
         if self._tts_cache:
             self._tts_cache.clear()
@@ -775,9 +792,26 @@ class Speech(GstSpeechPlayer):
 
             detected = _detect_language(text)
             pl_code, mapped_voice = self._kokoro_lang_map.get(detected, (None, None))
+            speed = 1.0
 
             # 1. Dedicated backend (Piper/MMS) where a language prefers one.
             backend = self._get_backend_for_lang(detected)
+
+            # Cache lookup before any synthesis. The voice key has to be the
+            # same one the store below uses, which is what _cache_voice_key is
+            # for. A hit skips the network entirely and just replays the audio.
+            cache_key = self._cache_voice_key(detected, pl_code, backend)
+            if self._tts_cache is not None:
+                cached, cached_sr = self._tts_cache.get(text, cache_key, detected, speed)
+                if cached is not None:
+                    sr = cached_sr or _DEFAULT_SAMPLE_RATE
+                    self._current_sample_rate = sr
+                    self._build_pipeline('audio_src', sr)
+                    self.restart_sound_device()
+                    self._push_waveform_to_appsrc(cached, sr, text)
+                    logger.debug(f"Cache hit for lang={detected}, {sr}Hz")
+                    return
+
             if backend is not None:
                 try:
                     sr = backend.sample_rate
@@ -787,9 +821,15 @@ class Speech(GstSpeechPlayer):
                     self.restart_sound_device()
                     waveform, actual_sr = backend.synthesize(text)
                     if waveform is not None and len(waveform) > 0:
-                        self._push_waveform_to_appsrc(
-                            waveform, int(actual_sr) if actual_sr else int(sr), text)
+                        final_sr = int(actual_sr) if actual_sr else int(sr)
+                        self._push_waveform_to_appsrc(waveform, final_sr, text)
                         self._record_backend_success(detected)
+                        if self._tts_cache is not None:
+                            try:
+                                self._tts_cache.put(text, cache_key, detected,
+                                                    speed, waveform, final_sr)
+                            except Exception:
+                                pass
                         logger.debug(f"Speaking via {backend} for lang={detected}")
                         return
                     self._record_backend_failure(detected)
@@ -809,7 +849,15 @@ class Speech(GstSpeechPlayer):
                                  else mapped_voice)
                         self._current_sample_rate = _KOKORO_SR
                         self._current_backend_type = 'kokoro'
-                        if self._stream_kokoro_audio(text, voice, pl_code):
+                        chunks = self._stream_kokoro_audio(text, voice, pl_code)
+                        if chunks:
+                            if self._tts_cache is not None:
+                                try:
+                                    full = numpy.concatenate(chunks)
+                                    self._tts_cache.put(text, cache_key, detected,
+                                                        speed, full, _KOKORO_SR)
+                                except Exception:
+                                    pass
                             logger.debug(
                                 f"Speaking via Kokoro ({voice}, pl={pl_code}) "
                                 f"for lang={detected}")
@@ -839,9 +887,13 @@ class Speech(GstSpeechPlayer):
         detected = _detect_language(text, lang_code)
         speed = 1.0
 
+        backend = self._get_backend_for_lang(detected)
+        pl_code = self._kokoro_lang_map.get(detected, ('a', None))[0]
+        # Same key for lookup and store, or the cache silently never hits.
+        cache_key = voice or self._cache_voice_key(detected, pl_code, backend)
+
         if self._tts_cache is not None:
-            cache_voice = voice or self._lang_voice_map.get(detected, 'af_heart')
-            cached, cached_sr = self._tts_cache.get(text, cache_voice, detected, speed)
+            cached, cached_sr = self._tts_cache.get(text, cache_key, detected, speed)
             if cached is not None:
                 sr = cached_sr or _DEFAULT_SAMPLE_RATE
                 self._build_pipeline('audio_src', sr)
@@ -850,7 +902,6 @@ class Speech(GstSpeechPlayer):
                 logger.debug(f"Cache hit for lang={detected}, {sr}Hz")
                 return
 
-        backend = self._get_backend_for_lang(detected)
         if backend is not None:
             try:
                 sr = backend.sample_rate
@@ -865,7 +916,7 @@ class Speech(GstSpeechPlayer):
                     self._record_backend_success(detected)
                     if self._tts_cache is not None:
                         try:
-                            self._tts_cache.put(text, 'alt', detected, speed, waveform, final_sr)
+                            self._tts_cache.put(text, cache_key, detected, speed, waveform, final_sr)
                         except Exception:
                             pass
                     logger.debug(f"Speaking via {backend} at {sr}Hz")
@@ -892,7 +943,7 @@ class Speech(GstSpeechPlayer):
                         if self._tts_cache is not None:
                             try:
                                 full_waveform = numpy.concatenate(waveform_chunks)
-                                self._tts_cache.put(text, 'kokoro', detected, speed, full_waveform, _KOKORO_SR)
+                                self._tts_cache.put(text, cache_key, detected, speed, full_waveform, _KOKORO_SR)
                             except Exception:
                                 pass
                         logger.debug(f"Speaking via Kokoro ({kokoro_voice}) for lang={detected}")
