@@ -215,6 +215,7 @@ class SpeakActivity(activity.Activity):
 
         if self._tablet_mode:
             self._entry = Gtk.Entry()
+            self._entry.set_placeholder_text("Type something to speak...")
             self._entry_box.pack_start(self._entry, True, True, 0)
             talk_button = ToolButton('microphone')
             talk_button.set_tooltip(_('Speak'))
