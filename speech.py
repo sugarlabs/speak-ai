@@ -334,16 +334,9 @@ class Speech(GstSpeechPlayer):
         bus.add_signal_watch()
         bus.connect('message', gst_message_cb)
 
-    def _collect_kokoro_audio(self, text, voice):
-        """Synthesise *text* with Kokoro and return a single concatenated numpy array.
-
-        All chunks from the Kokoro generator are collected and concatenated
-        before streaming begins. This enables caching the full result and
-        re-streaming it instantly on subsequent calls for the same phrase.
-
-        Returns a float32 numpy array, or None on failure.
-        """
-        chunks = []
+    def _stream_kokoro_audio(self, text, voice):
+        """Stream Kokoro audio chunks to the GStreamer pipeline"""
+        appsrc = None
         try:
             audio_generator = self.kokoro_pipeline(text, voice=voice)
             for _gs, _ps, audio_chunk in audio_generator:
