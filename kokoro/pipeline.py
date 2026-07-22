@@ -151,7 +151,7 @@ class KPipeline:
         else:
             f = hf_hub_download(repo_id=self.repo_id, filename=f'voices/{voice}.pt')
             if not voice.startswith(self.lang_code):
-                v = LANG_CODES.get(voice, voice)
+                v = LANG_CODES.get(voice[0], voice)
                 p = LANG_CODES.get(self.lang_code, self.lang_code)
                 logger.warning(f'Language mismatch, loading {v} voice into {p} pipeline.')
         pack = torch.load(f, weights_only=True)
