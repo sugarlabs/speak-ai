@@ -22,105 +22,122 @@
 #     along with Speak.activity.  If not, see <http://www.gnu.org/licenses/>.
 
 import math
-
 from gi.repository import Gtk
 
 
 class Eye(Gtk.DrawingArea):
+    """A GTK drawing area representing an animated eye."""
+
     def __init__(self, fill_color):
-        Gtk.DrawingArea.__init__(self)
+        super().__init__()
         self.connect("draw", self.draw)
-        self.x, self.y = 0, 0
+
+        self.x = 0
+        self.y = 0
         self.fill_color = fill_color
 
-    def has_padding(self):
+    def has_padding(self) -> bool:
         return True
 
-    def has_left_center_right(self):
+    def has_left_center_right(self) -> bool:
         return False
 
-    def look_at(self, x, y):
+    def look_at(self, x: float, y: float) -> None:
+        """Move pupil to look at given screen coordinates."""
         self.x = x
         self.y = y
         self.queue_draw()
 
-    def look_ahead(self):
+    def look_ahead(self) -> None:
+        """Reset eye to forward position."""
         self.x = None
         self.y = None
         self.queue_draw()
 
-    # Thanks to xeyes :)
-    def computePupil(self):
-        a = self.get_allocation()
+    def compute_pupil(self):
+        """Compute pupil position inside eye bounds."""
+        allocation = self.get_allocation()
 
         if self.x is None or self.y is None:
-            # look ahead, but not *directly* in the middle
-            pw = self.get_parent().get_allocation().width
-            if a.x + a.width // 2 < pw // 2:
-                cx = a.width * 0.6
+            parent = self.get_parent()
+            if parent:
+                pw = parent.get_allocation().width
+                cx = allocation.width * (0.6 if allocation.x + allocation.width // 2 < pw // 2 else 0.4)
             else:
-                cx = a.width * 0.4
-            return cx, a.height * 0.6
+                cx = allocation.width / 2
 
-        EYE_X, EYE_Y = self.translate_coordinates(
-            self.get_toplevel(), a.width // 2, a.height // 2)
-        EYE_HWIDTH = a.width
-        EYE_HHEIGHT = a.height
-        BALL_DIST = EYE_HWIDTH / 4
+            return cx, allocation.height * 0.6
 
-        dx = self.x - EYE_X
-        dy = self.y - EYE_Y
+        eye_x, eye_y = self.translate_coordinates(
+            self.get_toplevel(),
+            allocation.width // 2,
+            allocation.height // 2
+        )
+
+        dx = self.x - eye_x
+        dy = self.y - eye_y
 
         if dx or dy:
             angle = math.atan2(dy, dx)
-            cosa = math.cos(angle)
-            sina = math.sin(angle)
-            h = math.hypot(EYE_HHEIGHT * cosa, EYE_HWIDTH * sina)
-            x = (EYE_HWIDTH * EYE_HHEIGHT) * cosa / h
-            y = (EYE_HWIDTH * EYE_HHEIGHT) * sina / h
-            dist = BALL_DIST * math.hypot(x, y)
+            cos_a = math.cos(angle)
+            sin_a = math.sin(angle)
 
-            if dist < math.hypot(dx, dy):
-                dx = dist * cosa
-                dy = dist * sina
+            h = math.hypot(allocation.height * cos_a,
+                           allocation.width * sin_a)
 
-        return a.width // 2 + dx, a.height // 2 + dy
+            if h != 0:
+                x = (allocation.width * allocation.height) * cos_a / h
+                y = (allocation.width * allocation.height) * sin_a / h
+
+                ball_dist = allocation.width / 4
+                dist = ball_dist * math.hypot(x, y)
+
+                if dist < math.hypot(dx, dy):
+                    dx = dist * cos_a
+                    dy = dist * sin_a
+
+        return allocation.width // 2 + dx, allocation.height // 2 + dy
 
     def draw(self, widget, cr):
+        """Draw the eye and pupil."""
         bounds = self.get_allocation()
 
-        eyeSize = min(bounds.width, bounds.height)
-        outlineWidth = eyeSize / 20.0
-        pupilSize = eyeSize / 10.0
-        pupilX, pupilY = self.computePupil()
-        dX = pupilX - bounds.width / 2.
-        dY = pupilY - bounds.height / 2.
-        distance = math.sqrt(dX * dX + dY * dY)
-        limit = eyeSize // 2 - outlineWidth * 2 - pupilSize
-        if distance > limit:
-            pupilX = bounds.width // 2 + dX * limit // distance
-            pupilY = bounds.height // 2 + dY * limit // distance
+        eye_size = min(bounds.width, bounds.height)
+        outline_width = eye_size / 20.0
+        pupil_size = eye_size / 10.0
 
-        # background
+        pupil_x, pupil_y = self.compute_pupil()
+
+        dx = pupil_x - bounds.width / 2.0
+        dy = pupil_y - bounds.height / 2.0
+
+        distance = math.hypot(dx, dy)
+        limit = eye_size // 2 - outline_width * 2 - pupil_size
+
+        if distance > limit and distance != 0:
+            pupil_x = bounds.width // 2 + dx * limit // distance
+            pupil_y = bounds.height // 2 + dy * limit // distance
+
+        # Background
         cr.set_source_rgba(*self.fill_color.get_rgba())
         cr.rectangle(0, 0, bounds.width, bounds.height)
         cr.fill()
 
-        # eye ball
+        # Eyeball
         cr.arc(bounds.width // 2, bounds.height // 2,
-               eyeSize // 2 - outlineWidth // 2, 0, 2 * math.pi)
+               eye_size // 2 - outline_width // 2, 0, 2 * math.pi)
         cr.set_source_rgb(1, 1, 1)
         cr.fill()
 
-        # outline
-        cr.set_line_width(outlineWidth)
+        # Outline
+        cr.set_line_width(outline_width)
         cr.arc(bounds.width // 2, bounds.height // 2,
-               eyeSize // 2 - outlineWidth // 2, 0, 2 * math.pi)
+               eye_size // 2 - outline_width // 2, 0, 2 * math.pi)
         cr.set_source_rgb(0, 0, 0)
         cr.stroke()
 
-        # pupil
-        cr.arc(pupilX, pupilY, pupilSize, 0, 2 * math.pi)
+        # Pupil
+        cr.arc(pupil_x, pupil_y, pupil_size, 0, 2 * math.pi)
         cr.set_source_rgb(0, 0, 0)
         cr.fill()
 
