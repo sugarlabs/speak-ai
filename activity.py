@@ -181,6 +181,11 @@ def _is_tablet_mode():
 class SpeakActivity(activity.Activity):
     def __init__(self, handle):
         super(SpeakActivity, self).__init__(handle)
+    # First-run dependency setup
+    from setup_dependencies import setup_on_first_run
+    from sugar3.activity.activity import get_activity_root
+    setup_on_first_run(get_activity_root())
+        
 
         self._notebook = Gtk.Notebook()
         self.set_canvas(self._notebook)
