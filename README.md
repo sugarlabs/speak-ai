@@ -53,3 +53,8 @@ The `not-gstreamer1` branch is a backport of features and bug fixes
 from the `master` branch for ongoing maintenance of the activity on
 Fedora 18 systems which don't have well-functioning GStreamer 1
 packages.
+## Supported Languages and Limitations
+
+Currently, Speak-AI supports a limited set of languages with varying levels of pronunciation accuracy. While it performs well for some Latin-based languages, support for non-Latin scripts such as Devanagari (Hindi), Arabic, and Chinese may be limited or require further improvements.
+
+Users may notice differences in pronunciation quality depending on the language and the underlying TTS model. Expanding multilingual support and improving natural speech output remains an ongoing effort.
