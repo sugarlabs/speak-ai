@@ -19,6 +19,11 @@
 import numpy
 import threading
 
+from collections import OrderedDict
+import hashlib
+
+from spellchecker import SpellChecker
+
 from gi.repository import Gst
 from gi.repository import GLib
 from gi.repository import GObject
@@ -27,6 +32,26 @@ import logging
 logger = logging.getLogger('speak')
 
 from sugar3.speech import GstSpeechPlayer
+
+LANGUAGE_CODES = {
+    'en': 'a',
+    'hi': 'h',
+    'fr': 'f',
+    'it': 'i',
+    'pt': 'p',
+    'zh': 'z',
+    'ar': 'ar',
+}
+
+LANGUAGE_NAMES = {
+    'en': 'English',
+    'hi': 'Hindi',
+    'fr': 'French',
+    'it': 'Italian',
+    'pt': 'Portuguese',
+    'zh': 'Chinese (Mandarin)',
+    'ar': 'Arabic',
+}
 
 # Kokoro TTS imports
 try:
@@ -54,9 +79,16 @@ class Speech(GstSpeechPlayer):
         self.pipeline = None
         
         # Initialize Kokoro pipeline if available
-        self.kokoro_pipeline = None
+        self._pipeline_lock = threading.Lock()
+        self._audio_cache = OrderedDict()
+        self._cache_lock = threading.Lock()
+        self._max_cache_size = 20
+        self.current_language = 'en'
         if KOKORO_AVAILABLE:
-            threading.Thread(target=self.setup_kokoro).start()
+            # threading.Thread(target=self.setup_kokoro).start()
+            threading.Thread(target=self.setup_kokoro, args=('en',)).start()
+
+
         
         # Predefined Kokoro voices for future GUI selection - TODO
         self.kokoro_voices = [
@@ -76,8 +108,35 @@ class Speech(GstSpeechPlayer):
         for cb in ['peak', 'wave', 'idle']:
             self._cb[cb] = None
 
-    def setup_kokoro(self):
-        self.kokoro_pipeline = KPipeline(lang_code='a')
+   
+    
+    
+    
+
+    def setup_kokoro(self, language='en'):
+        """Initialize Kokoro TTS pipeline for the specified language.
+    
+        Args:
+            language: Language ISO code (en, hi, fr, it, pt, zh, ar)
+
+        """
+        lang_code = LANGUAGE_CODES.get(language, 'a')
+        self.kokoro_pipeline = KPipeline(lang_code=lang_code)
+        logger.debug(f"Kokoro initialized for language: {language} (code: {lang_code})")
+
+    # def set_language(self, language='english'):
+    #     """Change the TTS language at runtime.
+    
+    #     Args:
+    #         language: Language ISO code (en, hi, fr, it, pt, zh, ar)
+
+    #     """
+    
+    #     if language not in LANGUAGE_CODES:
+    #         logger.warning(f"Unsupported language: {language}. Defaulting to English.")
+    #         language = 'en'
+    #     threading.Thread(target=self.setup_kokoro, args=(language,)).start()
+    #     logger.debug(f"Language changed to: {language}")
 
     def disconnect_all(self):
         for cb in ['peak', 'wave', 'idle']:
@@ -101,6 +160,107 @@ class Speech(GstSpeechPlayer):
             logger.debug(f"Kokoro voice set to: {voice_name}")
         else:
             logger.warning(f"Invalid Kokoro voice: {voice_name}.")
+
+    def get_available_languages(self):
+        """Return list of supported language codes."""
+        return list(LANGUAGE_CODES.keys())
+    def _get_cache_key(self, text, voice):
+        """Generate a unique cache key for text + voice combination."""
+        raw = f"{text}:{voice}"
+        return hashlib.md5(raw.encode()).hexdigest()
+    
+    def get_cached_audio(self, text, voice):
+        """Return cached audio for text+voice if available, else None."""
+        key = self._get_cache_key(text, voice)
+        with self._cache_lock:
+            if key in self._audio_cache:
+                self._audio_cache.move_to_end(key)
+                logger.debug(f"Cache HIT for: {text[:30]}")
+                return self._audio_cache[key]
+        logger.debug(f"Cache MISS for: {text[:30]}")
+        return None
+    
+    def cache_audio(self, text, voice, audio_chunks):
+        """Store generated audio in cache with LRU eviction."""
+        key = self._get_cache_key(text, voice)
+        with self._cache_lock:
+            if key in self._audio_cache:
+                self._audio_cache.move_to_end(key)
+            else:
+                if len(self._audio_cache) >= self._max_cache_size:
+                    evicted = self._audio_cache.popitem(last=False)
+                    logger.debug(f"Cache evicted oldest entry")
+                self._audio_cache[key] = audio_chunks
+                logger.debug(f"Cached audio for: {text[:30]}")
+
+    def clear_cache(self):
+        """Clear all cached audio."""
+        with self._cache_lock:
+            self._audio_cache.clear()
+        logger.debug("Audio cache cleared")
+
+    def correct_spelling(self, text, lang_code='en'):
+        """Correct invented spellings before TTS processing.
+        
+        Corrects phonetic spellings common in child users
+        without modifying the original input — only for TTS.
+        
+        Args:
+            text: Input text to correct
+            lang_code: ISO language code (en, fr, es, pt, it)
+        
+        Returns:
+            Corrected text for TTS pronunciation
+        """
+        # Languages supported by pyspellchecker
+        SUPPORTED_LANGS = {
+            'en': 'en',
+            'fr': 'fr',
+            'es': 'es',
+            'pt': 'pt',
+            'it': 'it',
+        }
+        
+        if lang_code not in SUPPORTED_LANGS:
+            logger.debug(f"Spell correction not available for {lang_code}, skipping")
+            return text
+        
+        try:
+            spell = SpellChecker(language=SUPPORTED_LANGS[lang_code])
+            words = text.split()
+            corrected_words = []
+            
+            for word in words:
+                correction = spell.correction(word)
+                if correction and correction != word:
+                    logger.debug(f"Spelling corrected: {word} -> {correction}")
+                    corrected_words.append(correction)
+                else:
+                    corrected_words.append(word)
+            
+            corrected = ' '.join(corrected_words)
+            if corrected != text:
+                logger.debug(f"Full correction: '{text}' -> '{corrected}'")
+            return corrected
+        
+        except Exception as e:
+            logger.warning(f"Spell correction failed: {e}")
+            return text
+        
+
+    
+    
+    def set_language(self, lang_code):
+        """Change the TTS language at runtime."""
+        if lang_code in LANGUAGE_CODES:
+            self.current_language = lang_code
+            threading.Thread(
+                target=self.setup_kokoro,
+                args=(lang_code,)
+            ).start()
+            logger.debug(f"Language changed to: {lang_code}")
+        else:
+            logger.warning(f"Unsupported language code: {lang_code}")
 
     def get_available_kokoro_voices(self):
         return self.kokoro_voices.copy()
@@ -363,14 +523,67 @@ class Speech(GstSpeechPlayer):
             logger.exception("Error in Kokoro audio streaming")
             if appsrc:
                 appsrc.emit("end-of-stream")
+    def _stream_kokoro_audio(self, text, voice):
+        """Stream Kokoro audio chunks to the GStreamer pipeline.
+        Uses cache for repeated phrases to avoid regenerating audio.
+        """
+        try:
+            appsrc = self.pipeline.get_by_name('kokoro_src')
+            if not appsrc:
+                logger.error("Could not find kokoro_src element")
+                return
+
+            caps = Gst.Caps.from_string(
+            "audio/x-raw,format=F32LE,layout=interleaved,rate=24000,channels=1"
+            )
+            appsrc.set_property("caps", caps)
+
+            # Check cache first
+            cached = self.get_cached_audio(text, voice)
+            if cached:
+                logger.debug("Serving audio from cache")
+                for data_bytes in cached:
+                    buf = Gst.Buffer.new_wrapped(data_bytes)
+                    ret = appsrc.emit("push-buffer", buf)
+                    if ret != Gst.FlowReturn.OK:
+                        logger.error("Error pushing cached buffer")
+                        break
+                appsrc.emit("end-of-stream")
+                return
+
+            # Not in cache — generate with Kokoro and cache it
+            audio_generator = self.kokoro_pipeline(text, voice=voice)
+            chunks_to_cache = []
+
+            for i, (gs, ps, audio_chunk) in enumerate(audio_generator):
+                data_bytes = audio_chunk.numpy().tobytes()
+                chunks_to_cache.append(data_bytes)
+
+                buf = Gst.Buffer.new_wrapped(data_bytes)
+                ret = appsrc.emit("push-buffer", buf)
+                if ret != Gst.FlowReturn.OK:
+                    logger.error(f"Error pushing buffer {i} to GStreamer")
+                    break
+
+            # Save to cache for next time
+            self.cache_audio(text, voice, chunks_to_cache)
+            appsrc.emit("end-of-stream")
+
+        except Exception as e:
+            logger.error(f"Error in Kokoro audio streaming: {e}")
+            if appsrc:
+                appsrc.emit("end-of-stream")
 
     def speak(self, status, text):
         self.make_pipeline()
         
+    
+
         if KOKORO_AVAILABLE and self.kokoro_pipeline:
-            logger.debug('Using Kokoro TTS: voice=%s text=%s' % (self.current_kokoro_voice, text))
+            corrected_text = self.correct_spelling(text, self.current_language)
+            logger.debug('Using Kokoro TTS: voice=%s text=%s' % (self.current_kokoro_voice, corrected_text))
             self.restart_sound_device()
-            self._stream_kokoro_audio(text, self.current_kokoro_voice)
+            self._stream_kokoro_audio(corrected_text, self.current_kokoro_voice)
             
         else:
             # Fallback to espeak
