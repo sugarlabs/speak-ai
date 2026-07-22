@@ -1363,10 +1363,17 @@ class SpeakActivity(activity.Activity):
                         llm_thread.start()
                     else:
                         # No internet, try SLM -> Brain
-                        response = self._try_slm_response(text)
-                        if not response:
-                            response = brain.respond(text)
-                        self.face.say(response)
+                        self.face.say("Thinking...")
+
+                        def fetch_offline():
+                            response = self._try_slm_response(text)
+                            if not response:
+                                response = brain.respond(text)
+                            GLib.idle_add(lambda: self.face.say(response) or False)
+
+                        t = threading.Thread(
+                            target=fetch_offline, daemon=True)
+                        t.start()
                 else:
                     # Use traditional brain chatbot
                     brain_response = brain.respond(text)
