@@ -26,10 +26,10 @@ def is_connected():
 def ask_llm_prompted(question, custom_prompt = DEFAULT_PROMPT, timeout=120, max_length=200):
     if API_KEY is None:
         logging.error("Missing API key file: API_KEY.txt")
-        return False
+        return None
     
     if not is_connected():
-        return False
+        return None
 
     headers = {
         "X-API-Key": API_KEY,
@@ -57,7 +57,7 @@ def ask_llm_prompted(question, custom_prompt = DEFAULT_PROMPT, timeout=120, max_
 
         if 500 <= response.status_code < 600:
             logging.error(f"Server error: {response.status_code}")
-            return False
+            return None
         response.raise_for_status()
 
         # Parse the JSON response.
@@ -78,7 +78,7 @@ def ask_llm_prompted(question, custom_prompt = DEFAULT_PROMPT, timeout=120, max_
             logging.error(f"Response content: {response.text}")
         except Exception:
             pass
-    return False
+    return None
 
 if __name__ == "__main__":
     

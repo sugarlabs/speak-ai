@@ -1290,7 +1290,7 @@ class SpeakActivity(activity.Activity):
             
             llm_response = ask_llm_prompted(question=text, custom_prompt=custom_prompt)
 
-            if llm_response == None:
+            if not llm_response:
                 logging.error("LLM returned None response")
                 return None
 
