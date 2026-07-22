@@ -162,8 +162,8 @@ def _has_accelerometer():
 
 def _is_tablet_mode():
     try:
-        fp = open('/dev/input/event4', 'rb')
-        fp.close()
+        with open('/dev/input/event4', 'rb'):
+            pass
     except IOError:
         return False
 
@@ -420,7 +420,8 @@ class SpeakActivity(activity.Activity):
         self._first_time = False
 
     def read_file(self, file_path):
-        self._cfg = json.loads(open(file_path, 'r').read())
+        with open(file_path, 'r') as f:
+            self._cfg = json.loads(f.read())
 
         current_voice = self.face.status.voice
 
@@ -500,7 +501,8 @@ class SpeakActivity(activity.Activity):
                'text': self._entry.props.text,
                'history': history,
                'persona': self._current_persona, }
-        open(file_path, 'w').write(json.dumps(cfg))
+        with open(file_path, 'w') as f:
+            f.write(json.dumps(cfg))
 
     def _look_at_cursor(self, entry, *ignored):
         # make the eyes track the motion of the text cursor
@@ -522,9 +524,8 @@ class SpeakActivity(activity.Activity):
 
     def _test_orientation(self):
         if _has_accelerometer():
-            fh = open(ACCELEROMETER_DEVICE)
-            string = fh.read()
-            fh.close()
+            with open(ACCELEROMETER_DEVICE) as fh:
+                string = fh.read()
             xyz = string[1:-2].split(',')
             x = int(xyz[0])
             y = int(xyz[1])
