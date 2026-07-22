@@ -84,11 +84,17 @@ class Voice:
         self.language = language
         self.name = name
         friendlyname = name
-        friendlyname = friendlyname.replace('-test', '')
-        friendlyname = friendlyname.replace('_test', '')
-        friendlyname = friendlyname.replace('en-', '')
-        friendlyname = friendlyname.replace('english-wisper', 'whisper')
-        friendlyname = friendlyname.replace('english-us', 'us')
+
+        replacements = {
+            '-test': '',
+            '_test': '',
+            'en-': '',
+            'english-whisper': 'whisper',
+            'english-us': 'us'
+        }
+
+        for old, new in replacements.items():
+            friendlyname = friendlyname.replace(old, new)
 
         friendlynameRP = name  # friendlyname for RP
         friendlynameRP = friendlynameRP.replace('english_rp', 'rp')
