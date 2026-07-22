@@ -101,7 +101,7 @@ class KPipeline:
             if device is None:
                 if torch.cuda.is_available():
                     device = 'cuda'
-                elif os.environ.get('PYTORCH_ENABLE_MPS_FALLBACK') == '1' and torch.backends.mps.is_available():
+                elif __import__('os').environ.get('PYTORCH_ENABLE_MPS_FALLBACK') == '1' and torch.backends.mps.is_available():
                     device = 'mps'
                 else:
                     device = 'cpu'
