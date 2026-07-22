@@ -37,6 +37,7 @@ LANG_CODES = dict(
 
     # pip install misaki[zh]
     z='Mandarin Chinese',
+    r='Arabic',
 )
 
 class KPipeline:
@@ -138,10 +139,19 @@ class KPipeline:
             except ImportError:
                 logger.error("You need to `pip install misaki[zh]` to use lang_code='z'")
                 raise
+        elif lang_code == 'h':
+            from kokoro.hindi_g2p import HindiG2P
+            self.g2p = HindiG2P()
+            logger.info("Using custom Devanagari-to-IPA G2P for Hindi")
+        elif lang_code == 'r':
+            from kokoro.arabic_g2p import ArabicG2P
+            self.g2p = ArabicG2P()
+            logger.info("Using custom Arabic-to-IPA G2P for Arabic")
         else:
             language = LANG_CODES[lang_code]
-            logger.warning(f"Using EspeakG2P(language='{language}'). Chunking logic not yet implemented, so long texts may be truncated unless you split them with '\\n'.")
+            logger.warning(f"Using EspeakG2P(language='{language}'). Quality may be limited for this language.")
             self.g2p = espeak.EspeakG2P(language=language)
+
 
     def load_single_voice(self, voice: str):
         if voice in self.voices:
