@@ -70,6 +70,9 @@ class Speech(GstSpeechPlayer):
             'ff_siwis', 'hf_alpha', 'hf_beta', 'hm_omega', 'hm_psi',
             'if_sara', 'im_nicola', 'pf_dora', 'pm_alex', 'pm_santa'
         ]
+        # Remove duplicate voice entries while preserving order
+        self.kokoro_voices = list(dict.fromkeys(self.kokoro_voices))
+
         self.current_kokoro_voice = 'af_heart'
 
         self._cb = {}
