@@ -28,6 +28,7 @@ logger = logging.getLogger('speak')
 
 from sugar3.speech import GstSpeechPlayer
 
+
 # Kokoro TTS imports
 try:
     from kokoro import KPipeline
@@ -41,6 +42,18 @@ PITCH_MAX = 200
 RATE_MIN = 0
 RATE_MAX = 200
 
+# Maps Kokoro lang_code to voice name prefixes
+KOKORO_LANG_MAP = {
+    'a': ['af_', 'am_'],   # American English
+    'b': ['bf_', 'bm_'],   # British English
+    'j': ['jf_', 'jm_'],   # Japanese
+    'z': ['zf_', 'zm_'],   # Chinese
+    'e': ['ef_', 'em_'],   # Spanish
+    'f': ['ff_'],           # French
+    'h': ['hf_', 'hm_'],   # Hindi
+    'i': ['if_', 'im_'],   # Italian
+    'p': ['pf_', 'pm_'],   # Portuguese
+}
 
 class Speech(GstSpeechPlayer):
     __gsignals__ = {
@@ -76,8 +89,21 @@ class Speech(GstSpeechPlayer):
         for cb in ['peak', 'wave', 'idle']:
             self._cb[cb] = None
 
-    def setup_kokoro(self):
-        self.kokoro_pipeline = KPipeline(lang_code='a')
+    KOKORO_LANG_MAP = {
+    'a': ['af_', 'am_'],   # American English
+    'b': ['bf_', 'bm_'],   # British English
+    'j': ['jf_', 'jm_'],   # Japanese
+    'z': ['zf_', 'zm_'],   # Chinese
+    'e': ['ef_', 'em_'],   # Spanish
+    'f': ['ff_'],           # French
+    'h': ['hf_', 'hm_'],   # Hindi
+    'i': ['if_', 'im_'],   # Italian
+    'p': ['pf_', 'pm_'],   # Portuguese
+}
+
+def setup_kokoro(self):
+    self._current_lang = 'a'  # default American English
+    self.kokoro_pipeline = KPipeline(lang_code='a')
 
     def disconnect_all(self):
         for cb in ['peak', 'wave', 'idle']:
@@ -96,11 +122,25 @@ class Speech(GstSpeechPlayer):
         self._cb['idle'] = self.connect('idle', cb)
 
     def set_kokoro_voice(self, voice_name):
-        if voice_name in self.kokoro_voices:
-            self.current_kokoro_voice = voice_name
-            logger.debug(f"Kokoro voice set to: {voice_name}")
-        else:
+        if voice_name not in self.kokoro_voices:
             logger.warning(f"Invalid Kokoro voice: {voice_name}.")
+        return
+
+    # Detect correct lang_code from voice name prefix
+    detected_lang = 'a'  # fallback to American English
+    for lang_code, prefixes in KOKORO_LANG_MAP.items():
+        if any(voice_name.startswith(p) for p in prefixes):
+            detected_lang = lang_code
+            break
+
+    # Reinitialize pipeline only if language actually changed
+    if detected_lang != self._current_lang:
+        logger.debug(f"Switching Kokoro lang from {self._current_lang} to {detected_lang}")
+        self._current_lang = detected_lang
+        self.kokoro_pipeline = KPipeline(lang_code=detected_lang)
+
+    self.current_kokoro_voice = voice_name
+    logger.debug(f"Kokoro voice set to: {voice_name}")
 
     def get_available_kokoro_voices(self):
         return self.kokoro_voices.copy()
