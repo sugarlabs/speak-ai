@@ -365,6 +365,10 @@ class Speech(GstSpeechPlayer):
                 appsrc.emit("end-of-stream")
 
     def speak(self, status, text):
+        if not text or not text.strip():
+            logger.debug("Empty or invalid text input. Skipping speech.")
+            return
+
         self.make_pipeline()
         
         if KOKORO_AVAILABLE and self.kokoro_pipeline:
