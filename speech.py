@@ -58,18 +58,49 @@ class Speech(GstSpeechPlayer):
         if KOKORO_AVAILABLE:
             threading.Thread(target=self.setup_kokoro).start()
         
-        # Predefined Kokoro voices for future GUI selection - TODO
+        # Predefined Kokoro voices organized by language for multilingual support
+        self.kokoro_voices_by_language = {
+            "American English": [
+                'af_heart', 'af_alloy', 'af_aoede', 'af_bella', 'af_jessica',
+                'af_kore', 'af_nicole', 'af_nova', 'af_river', 'af_sarah', 'af_sky',
+                'am_adam', 'am_echo', 'am_eric', 'am_fenrir', 'am_liam',
+                'am_michael', 'am_onyx', 'am_puck', 'am_santa'
+            ],
+            "British English": [
+                'bf_alice', 'bf_emma', 'bf_isabella', 'bf_lily',
+                'bm_daniel', 'bm_fable', 'bm_george', 'bm_lewis'
+            ],
+            "Japanese": [
+                'jf_alpha', 'jf_gongitsune', 'jf_nezumi', 'jf_tebukuro',
+                'jm_kumo'
+            ],
+            "Chinese": [
+                'zf_xiaobei', 'zf_xiaoni', 'zf_xiaoxiao', 'zf_xiaoyi',
+                'zm_yunjian', 'zm_yunxi', 'zm_yunxia', 'zm_yunyang'
+            ],
+            "Spanish": [
+                'ef_dora', 'em_alex', 'em_santa'
+            ],
+            "French": [
+                'ff_siwis'
+            ],
+            "Hindi": [
+                'hf_alpha', 'hf_beta', 'hm_omega', 'hm_psi'
+            ],
+            "Italian": [
+                'if_sara', 'im_nicola'
+            ],
+            "Portuguese": [
+                'pf_dora', 'pm_alex', 'pm_santa'
+            ],
+        }
+
         self.kokoro_voices = [
-            'af_heart', 'af_alloy', 'af_aoede', 'af_bella', 'af_jessica', 'af_kore', 'af_nicole',
-            'af_nova', 'af_river', 'af_sarah', 'af_sky','am_adam', 'am_echo', 'am_eric', 'am_fenrir',
-            'am_liam', 'am_michael', 'am_onyx',
-            'am_puck', 'am_santa', 'bf_alice', 'bf_emma', 'bf_isabella', 'bf_lily', 'bm_daniel',
-            'bm_fable', 'bm_george', 'bm_lewis', 'jf_alpha', 'jf_gongitsune', 'jf_nezumi', 'jf_tebukuro',
-            'jm_kumo', 'zf_xiaobei', 'zf_xiaoni', 'zf_xiaoxiao', 'zf_xiaoyi', 'zm_yunjian',
-            'zm_yunxi', 'zm_yunxia', 'zm_yunyang', 'ef_dora', 'em_alex', 'em_santa',
-            'ff_siwis', 'hf_alpha', 'hf_beta', 'hm_omega', 'hm_psi',
-            'if_sara', 'im_nicola', 'pf_dora', 'pm_alex', 'pm_santa'
+            voice
+            for voices in self.kokoro_voices_by_language.values()
+            for voice in voices
         ]
+
         self.current_kokoro_voice = 'af_heart'
 
         self._cb = {}
@@ -104,6 +135,12 @@ class Speech(GstSpeechPlayer):
 
     def get_available_kokoro_voices(self):
         return self.kokoro_voices.copy()
+    
+    def get_voices_by_language(self, language):
+        return self.kokoro_voices_by_language.get(language, [])
+
+    def get_available_languages(self):
+        return list(self.kokoro_voices_by_language.keys())
 
     def get_default_kokoro_voices(self):
         """Return the default Kokoro voices for UI display."""
@@ -402,3 +439,4 @@ def get_speech():
         _speech = Speech()
 
     return _speech
+

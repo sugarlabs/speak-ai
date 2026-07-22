@@ -53,3 +53,50 @@ The `not-gstreamer1` branch is a backport of features and bug fixes
 from the `master` branch for ongoing maintenance of the activity on
 Fedora 18 systems which don't have well-functioning GStreamer 1
 packages.
+
+Note: This activity is designed to run inside the Sugar desktop environment. Running it      outside Sugar will cause errors. 
+
+> See below for platform-specific guidance.
+
+### Cross-Platform Setup Notes
+=====================
+
+### Running Outside Sugar Environment
+
+Running:
+
+    python activity.py
+
+outside the Sugar desktop/runtime may throw:
+
+    ModuleNotFoundError: dbus
+
+This is expected because `activity.py` depends on the Sugar runtime and system-level dbus integration.
+
+### Windows / Non-Sugar Platform Notes
+
+On Windows (without Sugar installed), the full activity cannot run outside the Sugar runtime.
+
+However, core modules like TTS and LLM components can still be tested independently without the full Sugar environment.
+
+### Testing Core AI Modules Independently
+
+Examples:
+
+    python LLM.py
+    python voice.py
+
+This allows partial development and testing without requiring the full Sugar desktop environment.
+
+### Testing the Full Sugar Activity
+
+To run the complete activity, use one of the following:
+
+- Sugar Desktop (Linux)
+- Sugar Live Build
+
+### Platform-Specific Notes
+
+- Linux: Recommended environment with native Sugar support.
+- Windows: Use WSL2 for partial compatibility.
+- macOS: Use a Linux VM for full activity testing.
