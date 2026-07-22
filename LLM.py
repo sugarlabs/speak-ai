@@ -1,16 +1,56 @@
+import os
 import requests
 import json
 import socket
 import logging
 
-#TODO: Dont hard code these, need to see how sugar as a whole manages API Keys
+from sugar3.activity.activity import get_activity_root
+
 API_URL = "https://ai.sugarlabs.org/ask-llm-prompted"
-try:
-    with open("API_KEY.txt", "r") as f:
-        API_KEY = f.read().strip()
-except OSError:
-    logging.error("Missing API_KEY.txt file.")
-    API_KEY = None
+
+# Store and read the API key from the activity's persistent data directory
+# instead of a flat file in the bundle. The data/ subdirectory of
+# get_activity_root() survives across activity invocations and is the
+# Sugar-standard location for per-activity configuration.
+_API_KEY_FILENAME = "api_key"
+
+
+def _get_api_key_path():
+    """Return the path to the API key file inside activity_root/data/."""
+    data_dir = os.path.join(get_activity_root(), "data")
+    os.makedirs(data_dir, exist_ok=True)
+    return os.path.join(data_dir, _API_KEY_FILENAME)
+
+
+def _read_api_key():
+    """Read the API key from the activity data directory."""
+    path = _get_api_key_path()
+    try:
+        with open(path, "r") as f:
+            key = f.read().strip()
+            if key:
+                return key
+    except OSError:
+        pass
+    logging.error(
+        "Missing API key. Save your key to: %s", path
+    )
+    return None
+
+
+def save_api_key(key):
+    """Persist *key* so it is available on next launch."""
+    path = _get_api_key_path()
+    with open(path, "w") as f:
+        f.write(key.strip())
+    logging.info("API key saved to %s", path)
+
+
+API_KEY = _read_api_key()
+
+def get_api_key():
+    """Return the current API key."""
+    return API_KEY
 
 DEFAULT_PROMPT = "You are a friendly teacher named Jane who is 28 years old. You teach 10 year old children. Always give helpful, educational responses in simple words that children can understand. Keep your answers between 20-40 words. Be encouraging and enthusiastic but never use emojis(ever). If you notice spelling mistakes, gently correct them. Stay focused on the topic and give relevant answers."
 
@@ -25,7 +65,7 @@ def is_connected():
 
 def ask_llm_prompted(question, custom_prompt = DEFAULT_PROMPT, timeout=120, max_length=200):
     if API_KEY is None:
-        logging.error("Missing API key file: API_KEY.txt")
+        logging.error("API key not set. Please enter your Sugar-AI API key via the activity settings.")
         return False
     
     if not is_connected():
@@ -89,3 +129,4 @@ if __name__ == "__main__":
         
         else:
             print("Error, LLM did not respond")
+

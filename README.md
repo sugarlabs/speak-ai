@@ -53,3 +53,24 @@ The `not-gstreamer1` branch is a backport of features and bug fixes
 from the `master` branch for ongoing maintenance of the activity on
 Fedora 18 systems which don't have well-functioning GStreamer 1
 packages.
+
+API Key Configuration
+=====================
+
+Speak-AI uses the `Sugar-AI <https://ai.sugarlabs.org/>`_ backend for
+LLM-powered chatbot responses. An API key is required for this feature.
+
+**Getting an API key:**
+
+1. Visit https://ai.sugarlabs.org/oauth-login
+2. Sign in with GitHub or Google.
+3. Copy your API key from the dashboard.
+
+**Setting the key in the activity:**
+
+When you launch Speak-AI for the first time, a dialog will
+automatically prompt you to enter your API key. To change it later,
+click the **Set Sugar-AI API Key** button in the activity toolbar.
+
+If no key is set, the activity will fall back to the on-device SLM
+or AIML brain.

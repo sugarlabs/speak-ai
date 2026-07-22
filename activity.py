@@ -93,7 +93,7 @@ try:
 except ImportError:
     USING_BRAIN = True
 
-from LLM import is_connected, ask_llm_prompted, DEFAULT_PROMPT
+from LLM import is_connected, ask_llm_prompted, DEFAULT_PROMPT, save_api_key
 from GenAI import is_profane
 
 SERVICE = 'org.sugarlabs.Speak'
@@ -330,6 +330,14 @@ class SpeakActivity(activity.Activity):
         separator.set_expand(True)
         toolbox.toolbar.insert(separator, -1)
 
+        self._api_key_button = ToolButton('preferences-system')
+        self._api_key_button.set_tooltip(_('Set Sugar-AI API Key'))
+        self._api_key_button.connect('clicked', self._show_api_key_dialog)
+        toolbox.toolbar.insert(self._api_key_button, -1)
+        self._api_key_button.show()
+
+
+
         toolbox.toolbar.insert(StopButton(self), -1)
 
         toolbox.show_all()
@@ -385,6 +393,9 @@ class SpeakActivity(activity.Activity):
 
     def _new_instance(self):
         if self._first_time:
+            from LLM import get_api_key
+            if get_api_key() is None:
+                GLib.timeout_add(500, self._show_api_key_dialog)
             # self.voices.connect('changed', self.__changed_voices_cb)
             self.pitchadj.connect('value_changed', self._pitch_adjusted_cb)
             self.rateadj.connect('value_changed', self._rate_adjusted_cb)
@@ -418,6 +429,46 @@ class SpeakActivity(activity.Activity):
                                        % self.owner.props.nick)
         self._set_idle_phrase(speak=False)
         self._first_time = False
+
+
+    def _show_api_key_dialog(self, button=None):
+        """Show dialog to enter or update the Sugar-AI API key."""
+        from LLM import get_api_key
+        dialog = Gtk.Dialog(
+            title=_('Sugar-AI API Key'),
+            transient_for=self.get_toplevel(),
+            modal=True,
+            destroy_with_parent=True,
+        )
+        dialog.add_buttons(
+            _('Cancel'), Gtk.ResponseType.CANCEL,
+            _('Save'), Gtk.ResponseType.OK,
+        )
+        content = dialog.get_content_area()
+        content.set_spacing(8)
+        content.set_border_width(12)
+        label = Gtk.Label()
+        label.set_markup(
+            _('Enter your <b>Sugar-AI API key</b>.\n'
+              'Get one at <b>ai.sugarlabs.org</b>')
+        )
+        label.set_line_wrap(True)
+        content.pack_start(label, False, False, 0)
+        entry = Gtk.Entry()
+        entry.set_placeholder_text(_('Paste your API key here'))
+        entry.set_visibility(False)
+        existing = get_api_key()
+        if existing:
+            entry.set_text(existing)
+        content.pack_start(entry, False, False, 0)
+        dialog.show_all()
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            key = entry.get_text().strip()
+            if key:
+                save_api_key(key)
+                logging.info('Sugar-AI API key saved.')
+        dialog.destroy()
 
     def read_file(self, file_path):
         self._cfg = json.loads(open(file_path, 'r').read())
