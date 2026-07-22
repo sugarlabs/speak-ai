@@ -53,3 +53,34 @@ The `not-gstreamer1` branch is a backport of features and bug fixes
 from the `master` branch for ongoing maintenance of the activity on
 Fedora 18 systems which don't have well-functioning GStreamer 1
 packages.
+
+
+Common Setup Issues (Windows, WSL, Linux)
+=========================================
+
+While testing the Speak activity locally across different environments, you may encounter some platform-specific behavior. The notes below may help clarify what is expected.
+
+## Running activity.py directly
+
+If you run:
+
+    python activity.py
+
+outside the Sugar desktop/runtime environment, you may see an error like:
+
+    ModuleNotFoundError: dbus
+
+This is expected. The `activity.py` file is the Sugar entry point and depends on the Sugar runtime and system-level `dbus` integration.
+
+## What can be tested without Sugar?
+
+Core components such as TTS and LLM modules can still be tested independently without the full Sugar environment.
+
+## Running the full activity
+
+To run the complete activity interface, the Sugar desktop/runtime (or a Sugar Live build) is required.
+
+## Notes for Windows and WSL users
+
+On Windows (without Sugar installed), the full activity will not run directly.  
+Using WSL with a Linux environment may allow partial testing, but full integration still requires the Sugar runtime.
