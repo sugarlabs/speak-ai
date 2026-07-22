@@ -1481,7 +1481,6 @@ class SpeakActivity(activity.Activity):
                                 'old_voice': self._current_voice[0].friendlyname,
                                 'new_voice': new_voice.friendlyname}
             else:
-                new_voice = new_voice[0]
                 sorry = None
 
             self._set_voice(new_voice)
