@@ -160,23 +160,24 @@ class TextBox(Gtk.TextView):
         if event.type.value_name != 'GDK_BUTTON_RELEASE':
             return False
 
-        x, y = self.window_to_buffer_coords(Gtk.TextWindowType.WIDGET,
-                                            int(event.x), int(event.y))
-        iter_tags = self.get_iter_at_location(x, y)
+        x, y = self.window_to_buffer_coords(Gtk.TextWindowType.WIDGET,int(event.x), int(event.y))
 
-        for tag in iter_tags.get_tags():
-            try:
-                url = tag.url
-            except BaseException:
-                url = None
-            if url is not None:
-                if event.button == 3:
-                    palette = tag.palette
-                    xw, yw = self.get_toplevel().get_pointer()
-                    palette.popup()
-                else:
-                    self._show_via_journal(url)
-                break
+
+        success, iter_tags = self.get_iter_at_location(x, y)
+        if success:
+            for tag in iter_tags.get_tags():
+                try:
+                    url = tag.url
+                except BaseException:
+                    url = None
+                if url is not None:
+                    if event.button == 3:
+                        palette = tag.palette
+                        xw, yw = self.get_toplevel().get_pointer()
+                        palette.popup()
+                    else:
+                        self._show_via_journal(url)
+                        break
 
         return False
 
@@ -194,9 +195,10 @@ class TextBox(Gtk.TextView):
             return hovering
 
         self.palette = None
-        iter_tags = self.get_iter_at_location(x, y)
-
-        tags = iter_tags[1].get_tags()
+        success, iter_tags = self.get_iter_at_location(x, y)
+        if not success:
+            return hovering
+        tags = iter_tags.get_tags()
         for tag in tags:
             try:
                 url = tag.url
@@ -692,5 +694,5 @@ class _URLMenu(Palette):
             if url.startswith(protocol):
                 no_protocol = False
         if no_protocol:
-            url = 'http://' + url
+            url = 'https://' + url #https is encrypted and secured
         return url
