@@ -39,6 +39,62 @@ Speak is not packaged by Debian and Ubuntu distributions.  On Debian
 and Ubuntu systems dependencies include `gstreamer1.0-espeak`,
 `gir1.2-gstreamer-1.0`, and `gir1.2-gst-plugins-base-1.0`.
 
+Multilingual Kokoro Support
+===========================
+
+Recent improvements include:
+
+* language-family-aware Kokoro pipeline routing based on selected voice;
+* script-aware automatic voice selection for text input (Latin, Devanagari,
+  Arabic, Chinese Han, and Japanese Kana/Kanji cues), and;
+* short phrase audio caching for faster repeated playback.
+
+Hindi TTS note:
+The activity now detects Devanagari input and automatically routes it to a
+Devanagari-friendly Kokoro voice family (rather than forcing everything
+through an English pipeline). A Hindi test phrase is included in
+`tests/data/multilingual_phrases.json`.
+
+To preview script detection and automatic voice routing logic:
+
+```
+python tools/multilingual_eval.py
+```
+
+With custom phrase set:
+
+```
+python tools/multilingual_eval.py --phrases-file my_phrases.json
+```
+
+The JSON file may be either:
+
+* a list of phrases, or;
+* an object like `{"phrases": ["..."]}`.
+
+Multilingual Community Evaluation
+=================================
+
+Dataset for multilingual routing checks:
+
+* `tests/data/multilingual_phrases.json`
+
+Run dataset validation:
+
+```
+python tools/validate_multilingual_routing.py
+```
+
+Community pronunciation template:
+
+* `tests/data/pronunciation_scorecard_template.csv`
+
+Aggregate reviewer scores:
+
+```
+python tools/pronunciation_scorecard.py --input tests/data/pronunciation_scorecard_template.csv --output pronunciation_summary.csv
+```
+
 Branch master
 =============
 
