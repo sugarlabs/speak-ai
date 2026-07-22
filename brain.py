@@ -46,8 +46,12 @@ BOTS = {
 
 
 def get_mem_info(tag):
-    meminfo = open('/proc/meminfo').readlines()
-    return int([i for i in meminfo if i.startswith(tag)][0].split()[1])
+    try:
+        with open('/proc/meminfo') as f:
+            meminfo = f.readlines()
+        return int([i for i in meminfo if i.startswith(tag)][0].split()[1])
+    except OSError:
+        return 0
 
 
 # load Standard AIML set for restricted systems

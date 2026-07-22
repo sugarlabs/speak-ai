@@ -1,3 +1,5 @@
+import os
+from sugar3.activity.activity import get_activity_root
 import requests
 import json
 import socket
@@ -5,8 +7,9 @@ import logging
 
 #TODO: Dont hard code these, need to see how sugar as a whole manages API Keys
 API_URL = "https://ai.sugarlabs.org/ask-llm-prompted"
+_KEY_PATH = os.path.join(get_activity_root(), "API_KEY.txt")
 try:
-    with open("API_KEY.txt", "r") as f:
+    with open(_KEY_PATH, "r") as f:
         API_KEY = f.read().strip()
 except OSError:
     logging.error("Missing API_KEY.txt file.")

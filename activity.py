@@ -420,7 +420,8 @@ class SpeakActivity(activity.Activity):
         self._first_time = False
 
     def read_file(self, file_path):
-        self._cfg = json.loads(open(file_path, 'r').read())
+        with open(file_path, 'r') as f:
+            self._cfg = json.loads(f.read())
 
         current_voice = self.face.status.voice
 
@@ -500,7 +501,8 @@ class SpeakActivity(activity.Activity):
                'text': self._entry.props.text,
                'history': history,
                'persona': self._current_persona, }
-        open(file_path, 'w').write(json.dumps(cfg))
+        with open(file_path, 'w') as f:
+            f.write(json.dumps(cfg))
 
     def _look_at_cursor(self, entry, *ignored):
         # make the eyes track the motion of the text cursor

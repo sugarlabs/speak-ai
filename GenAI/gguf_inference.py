@@ -72,7 +72,7 @@ class GGUFInference:
     def _get_generation_settings(self, mode: int) -> Dict:
         """Get generation settings based on mode."""
         base_settings = {
-            "max_tokens": 3000,
+            "max_tokens": 200,
             "top_p": 0.9,
             "top_k": 50,
             "repetition_penalty": 1.1,
@@ -213,10 +213,7 @@ class GGUFInference:
         """
         # Check for profanity in student input
         if self._contains_profanity(question):
-            blocked_response = "Looks like you have typed in a blacklisted word"
-            if maintain_conversation:
-                self.conversation_history.append({"student": question, "teacher": blocked_response})
-            return blocked_response
+            return "Looks like you have typed in a blacklisted word"
 
         if maintain_conversation:
             instruction = self._truncate_history_if_needed(new_student_input=question)
@@ -234,10 +231,7 @@ class GGUFInference:
 
             # Check for profanity in model output
             if self._contains_profanity(teacher_response):
-                blocked_response = "Sorry, I cant answer this, can we talk about something else"
-                if maintain_conversation:
-                    self.conversation_history.append({"student": question, "teacher": blocked_response})
-                return blocked_response
+                return "Sorry, I cant answer this, can we talk about something else"
 
             # Add to conversation history if requested
             if maintain_conversation:
