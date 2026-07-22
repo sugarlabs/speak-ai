@@ -53,3 +53,31 @@ The `not-gstreamer1` branch is a backport of features and bug fixes
 from the `master` branch for ongoing maintenance of the activity on
 Fedora 18 systems which don't have well-functioning GStreamer 1
 packages.
+
+## Development Setup (macOS/Linux)
+
+This section helps contributors run Speak outside full Sugar desktop
+(for development and GSoC contributions).
+
+### Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Run activity directly
+
+```bash
+python activity.py
+```
+
+Note: On macOS, `dbus` errors are expected since Sugar desktop is not installed.
+Core TTS and LLM modules can still be tested independently.
+
+### Important files for development
+
+- `kokoro/` — TTS models
+- `speech.py` — TTS pipeline
+- `LLM.py` — language model integration
+- `voice.py` — voice and language selection
+- `activity.py` — Sugar entry point
