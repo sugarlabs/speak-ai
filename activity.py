@@ -205,6 +205,7 @@ class SpeakActivity(activity.Activity):
         with open('personas.json', 'r') as f:
             self._personas = json.load(f)
         self._current_persona = 'Jane'
+        self._slm_model = None  # Cached SLM model instance
 
         # make an audio device for playing back and rendering audio
         self.connect('notify::active', self._active_cb)
@@ -1310,11 +1311,13 @@ class SpeakActivity(activity.Activity):
             return "Hmm, that word isn't very friendly. Talking with kind words makes chatting more fun! Can you try again with a friendly word?"
 
         try:
-            model_path = "./GenAI/LlaMA-135-Claude-RUN2-q4.gguf"
-            model = load_gguf_model(model_path)
-            model.set_generation_mode(3)
+            # Cache the SLM model to avoid reloading from disk on every message
+            if self._slm_model is None:
+                model_path = "./GenAI/LlaMA-135-Claude-RUN2-q4.gguf"
+                self._slm_model = load_gguf_model(model_path)
+                self._slm_model.set_generation_mode(3)
 
-            model_output = model.ask_question(text)
+            model_output = self._slm_model.ask_question(text)
             if is_profane(model_output):
                 model_output = "Sorry, I was not able to generate this response."
             return model_output
