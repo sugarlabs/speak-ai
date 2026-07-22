@@ -96,12 +96,26 @@ class Speech(GstSpeechPlayer):
         self._cb['idle'] = self.connect('idle', cb)
 
     def set_kokoro_voice(self, voice_name):
+        """Set Kokoro voice. Falls back to default if invalid.
+
+        Returns:
+            bool: True if valid voice was set, False if fallback was used.
+        """
         if voice_name in self.kokoro_voices:
             self.current_kokoro_voice = voice_name
             logger.debug(f"Kokoro voice set to: {voice_name}")
+            return True
+        default_voices = self.get_default_kokoro_voices()
+        fallback_voice = (
+            default_voices[0] if default_voices else (self.kokoro_voices[0] if self.kokoro_voices else None)
+        )
+        if fallback_voice:
+            logger.warning(f"Invalid Kokoro voice: {voice_name}. Falling back to default: {fallback_voice}")
+            self.current_kokoro_voice = fallback_voice
         else:
-            logger.warning(f"Invalid Kokoro voice: {voice_name}.")
-
+            logger.error(f"Invalid Kokoro voice: {voice_name} and no fallback voices available.")
+            return False
+        
     def get_available_kokoro_voices(self):
         return self.kokoro_voices.copy()
 
