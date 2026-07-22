@@ -1076,7 +1076,8 @@ class SpeakActivity(activity.Activity):
             if jobject and jobject.file_path:
                 selector = FaceSelector(jobject.file_path)
                 selector.connect('face-processed',
-                                 self._photo_face_processed_cb)
+                                 self.
+_photo_face_processed_cb)
                 selector.connect('cancel', self._photo_face_cancel_cb)
                 self._notebook.append_page(selector, Gtk.Label(''))
                 selector.show()
@@ -1086,9 +1087,28 @@ class SpeakActivity(activity.Activity):
         chooser.destroy()
 
     def _photo_face_processed_cb(self, widget, *face_data):
-        lighter = style.Color(self._colors[_lighter_color(self._colors)])
-        self._set_face(photoface.View(*face_data, fill_color=lighter),
-                       FACE_PHOTO)
+        try:
+            if not face_data:
+                logger.error("No face data received")
+                if self.face:
+                    self.face.say_notification(_("Failed to load image"))
+                return
+            lighter = style.Color(self._colors[_lighter_color(self._colors)])
+            view = photoface.View(*face_data, fill_color=lighter)
+            self._set_face(view, FACE_PHOTO)
+
+        except TypeError as error:
+            logger.error(f"Type error while setting photo face: {error}")
+            if self.face:
+                self.face.say_notification(_("Failed to load image"))
+        except ValueError as error:
+            logger.error(f"Value error while setting photo face: {error}")
+            if self.face:
+                self.face.say_notification(_("Failed to load image"))
+        except Exception as error:
+            logger.exception(f"Unexpected error while setting photo face: {error}")
+            if self.face:
+                self.face.say_notification(_("Failed to load image"))
 
     def _photo_face_cancel_cb(self, widget):
         self._notebook.set_current_page(0)
