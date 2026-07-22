@@ -40,7 +40,17 @@ PITCH_MIN = 0
 PITCH_MAX = 200
 RATE_MIN = 0
 RATE_MAX = 200
-
+VOICE_TO_LANG = {
+    'af': 'a', 'am': 'a',
+    'bf': 'b', 'bm': 'b',
+    'hf': 'h', 'hm': 'h',
+    'jf': 'j', 'jm': 'j',
+    'ef': 'e', 'em': 'e',
+    'ff': 'f',
+    'zf': 'z', 'zm': 'z',
+    'if': 'i', 'im': 'i',
+    'pf': 'p', 'pm': 'p',
+}
 
 class Speech(GstSpeechPlayer):
     __gsignals__ = {
@@ -52,12 +62,7 @@ class Speech(GstSpeechPlayer):
     def __init__(self):
         GstSpeechPlayer.__init__(self)
         self.pipeline = None
-        
-        # Initialize Kokoro pipeline if available
-        self.kokoro_pipeline = None
-        if KOKORO_AVAILABLE:
-            threading.Thread(target=self.setup_kokoro).start()
-        
+            
         # Predefined Kokoro voices for future GUI selection - TODO
         self.kokoro_voices = [
             'af_heart', 'af_alloy', 'af_aoede', 'af_bella', 'af_jessica', 'af_kore', 'af_nicole',
@@ -72,12 +77,23 @@ class Speech(GstSpeechPlayer):
         ]
         self.current_kokoro_voice = 'af_heart'
 
+         # Initialize Kokoro pipeline if available
+        self.kokoro_pipeline = None
+        if KOKORO_AVAILABLE:
+            threading.Thread(target=self.setup_kokoro).start()
+
         self._cb = {}
         for cb in ['peak', 'wave', 'idle']:
             self._cb[cb] = None
 
     def setup_kokoro(self):
-        self.kokoro_pipeline = KPipeline(lang_code='a')
+        if not hasattr(self, 'current_kokoro_voice'):
+            self.current_kokoro_voice = 'af_heart'
+        lang_code = VOICE_TO_LANG.get(
+            self.current_kokoro_voice[:2], 'a'
+        )
+        self.kokoro_pipeline = KPipeline(lang_code=lang_code)
+        self._current_lang_code = lang_code
 
     def disconnect_all(self):
         for cb in ['peak', 'wave', 'idle']:
@@ -98,7 +114,13 @@ class Speech(GstSpeechPlayer):
     def set_kokoro_voice(self, voice_name):
         if voice_name in self.kokoro_voices:
             self.current_kokoro_voice = voice_name
-            logger.debug(f"Kokoro voice set to: {voice_name}")
+            prefix = voice_name[:2]
+            lang_code = VOICE_TO_LANG.get(prefix, 'a')
+            current_lang = getattr(self, '_current_lang_code', None)
+            if self.kokoro_pipeline and lang_code != current_lang:
+                self.kokoro_pipeline = KPipeline(lang_code=lang_code)
+                self._current_lang_code = lang_code
+            logger.debug(f"Kokoro voice set to: {voice_name}, lang: {lang_code}")
         else:
             logger.warning(f"Invalid Kokoro voice: {voice_name}.")
 
