@@ -15,3 +15,7 @@ kokoro_int8.onnx
 models/
 .tts_cache/
 profile.json
+
+# Scratch WAVs written at the repo root when driving speech.py by hand.
+# Evaluation output belongs under tests/evaluation/wav/, ignored above.
+/demo_*.wav

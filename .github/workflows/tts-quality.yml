@@ -87,3 +87,19 @@ jobs:
       # low-RAM guard. Serves fixtures over localhost, so no network.
       - name: Model manager
         run: pytest tests/evaluation/test_model_manager.py -q
+
+      # Static check that backend model IDs exist and match MANIFEST.json.
+      # No network, no torch. Guards the mms-tts-que bug from coming back.
+      - name: Backend model IDs
+        run: pytest tests/evaluation/test_backend_model_ids.py -q
+
+      # The language table behind the palette: no dup codes, valid tiers,
+      # expected coverage. Read via ast, so no torch.
+      - name: Supported languages table
+        run: pytest tests/evaluation/test_supported_languages.py -q
+
+      # Latin-script detection: every hint is reachable under the tokeniser,
+      # no hint collides with another language, and undetected text stays
+      # distinguishable from English. Read via ast, so no torch.
+      - name: Language detection
+        run: pytest tests/evaluation/test_language_detection.py -q
