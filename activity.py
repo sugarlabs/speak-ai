@@ -322,7 +322,10 @@ class SpeakActivity(activity.Activity):
         self._kokoro_button.connect('clicked', self._face_palette_cb)
         toolbox.toolbar.insert(self._kokoro_button, -1)
 
-        self._language_button = ToolButton('module-language')
+        # Not 'module-language' — the Kokoro voice button above already uses
+        # it, and two adjacent toolbar buttons with the same icon are not
+        # distinguishable by the child who has to pick between them.
+        self._language_button = ToolButton('languages')
         self._language_button.set_tooltip(_('Languages'))
         self._make_languages()
         self._language_button.connect('clicked', self._face_palette_cb)
@@ -937,8 +940,16 @@ class SpeakActivity(activity.Activity):
                 # these come from a table CONTRIBUTING_LANGUAGES.md invites
                 # people to extend, and one '&' in a language name would
                 # otherwise take out the whole palette with a markup error.
+                #
+                # The leading U+200E pins the line to left-to-right. Without
+                # it the Arabic endonym makes the first strong character RTL,
+                # so Pango lays the whole row out right-to-left and "(Arabic)"
+                # jumps to the left of العربية while every other row reads the
+                # other way. The mark fixes the paragraph direction only; the
+                # Arabic word itself still shapes and renders RTL.
                 label.set_markup(
-                    '<span size="large">%s</span> <span size="small">(%s)</span>'
+                    '\u200e<span size="large">%s</span> '
+                    '<span size="small">(%s)</span>'
                     % (GLib.markup_escape_text(endonym),
                        GLib.markup_escape_text(name)))
                 alignment = Gtk.Alignment.new(0, 0, 0, 0)
