@@ -88,23 +88,84 @@ _LANG_DETECT_RANGES = [
     ('\u4E00', '\u9FFF', 'zh'),
 ]
 
+# Languages the activity can speak, grouped by the engine that carries them.
+# The tier is what the UI groups by; `endonym` is the language's own name, so a
+# child sees their language written the way they know it rather than an English
+# label. Order within each tier is roughly by speaker count. Language is still
+# auto-detected from the typed text at synthesis time, so this list is for the
+# palette and for telling the user what is supported, not for routing.
+SUPPORTED_LANGUAGES = [
+    # tier label,        code,   English name,   endonym
+    ('Neural (Kokoro)', 'en-us', 'English',      'English'),
+    ('Neural (Kokoro)', 'hi',    'Hindi',        'हिन्दी'),
+    ('Neural (Kokoro)', 'es',    'Spanish',      'Español'),
+    ('Neural (Kokoro)', 'fr',    'French',       'Français'),
+    ('Neural (Kokoro)', 'pt-br', 'Portuguese',   'Português'),
+    ('Neural (Kokoro)', 'zh',    'Mandarin',     '中文'),
+    ('Neural (Piper)',  'ar',    'Arabic',       'العربية'),
+    ('Neural (Piper)',  'sw',    'Swahili',      'Kiswahili'),
+    ('Basic (MMS)',     'rw',    'Kinyarwanda',  'Ikinyarwanda'),
+    ('Basic (MMS)',     'qu',    'Quechua',      'Runa Simi'),
+    ('Basic (MMS)',     'gn',    'Guarani',      "Avañe'ẽ"),
+    ('Basic (MMS)',     'ay',    'Aymara',       'Aymar aru'),
+]
+
+# Whole-token hints for languages that share the Latin script, so they cannot
+# be told apart by _LANG_DETECT_RANGES.
+#
+# Two rules keep this table from doing more harm than good:
+#
+#   1. A hint must not be a common word in another language here. "ha" used to
+#      be a Guarani hint, but it is also the Spanish auxiliary verb, so "Ella ha
+#      comido" scored gn=1/es=0 and a Spanish child got routed to Guarani MMS.
+#      A wrong-language voice is worse than the English fallback, because the
+#      fallback at least sounds like a machine reading Spanish rather than
+#      confident nonsense.
+#   2. Hints with apostrophes must survive tokenisation — see _TOKEN_RE.
 _LATIN_HINTS = {
+    # English is listed even though it is the default, so that English text is
+    # positively identified rather than merely unrecognised. A pinned persona
+    # language fills in only where nothing matched, so without these the
+    # Spanish persona would also claim plain English text.
+    'en-us': ['the', 'and', 'you', 'what', 'how', 'hello', 'thank', 'please',
+              'have', 'with', 'this', 'that', 'are', 'why'],
     'es': ['hola', 'gracias', 'por', 'favor', 'buenos', 'días', 'cómo', 'está', 'qué', 'tienes'],
     'fr': ['bonjour', 'merci', 's\'il', 'vous', 'plaît', 'comment', 'allez', 'quoi', 'pouvez'],
     'pt-br': ['olá', 'obrigado', 'por', 'favor', 'bom', 'dia', 'como', 'você', 'está', 'pode'],
     'sw': ['jambo', 'asante', 'ndio', 'hapana', 'habari', 'mambo', 'pole', 'karibu'],
     'qu': ['imayna', 'allin', 'ñan', 'rimaykullayki', 'pachamama', 'yanapay'],
-    'gn': ['mba\'echu', 'aguiejaty', 'nde', 'ha', 'ore', 'gua', 'porã'],
+    # 'ha', 'ore' and 'gua' removed: all three collide with Spanish or
+    # Portuguese. What is left is either diacritic-marked or long enough to be
+    # unambiguous.
+    'gn': ['mba\'éichapa', 'aguyje', 'avañe\'ẽ', 'ndaipóri', 'rohayhu', 'porã', 'nde'],
     'rw': ['muraho', 'amakuru', 'ndego', 'ubuntu', 'ibanga', 'isoko'],
-    'ay': ['kamisaki', 'waliki', 'sumawa', 'napa', 'kunjta', 'jisul'],
+    # 'napa' collided with Spanish/Portuguese place and loan words; the
+    # remaining forms are distinctively Aymara.
+    'ay': ['kamisaraki', 'kamisaki', 'waliki', 'sumawa', 'jikisiñkama', 'jilata', 'kullaka'],
 }
 
+# Tokeniser for hint matching. \w-only splitting would break "s'il" into "s"
+# and "il" and "mba'éichapa" into "mba" and "éichapa", which silently made
+# every apostrophe-bearing hint above unmatchable. Allowing an internal
+# apostrophe keeps them intact while still refusing substring matches, so the
+# Guarani hint "porã" cannot fire inside a longer word.
+_TOKEN_RE = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)*", re.UNICODE)
 
-def _detect_language(text: str, lang_code: str = None) -> str:
-    if lang_code:
-        return lang_code
+# Typographic apostrophe (U+2019) folded to ASCII so text pasted from a word
+# processor tokenises the same way as text typed in the activity.
+_APOSTROPHES = str.maketrans({'’': "'", 'ʼ': "'"})
+
+
+def _detect_language_or_none(text: str) -> Optional[str]:
+    """Detected language, or None when the text carries no positive evidence.
+
+    Split out from _detect_language so a caller can tell "this is English"
+    apart from "this could be anything". Both look identical once the default
+    has been applied, and a language hint must only fill the second case —
+    otherwise pinning a persona's language would also override genuine English.
+    """
     if not text or not text.strip():
-        return 'en-us'
+        return None
 
     script_counts = {}
     for char in text:
@@ -119,8 +180,8 @@ def _detect_language(text: str, lang_code: str = None) -> str:
 
     # Match hint words as whole tokens, not substrings — otherwise e.g. the
     # Guarani hint "gua" matches inside the English word "languages".
-    tokens = set(re.findall(r"[^\W\d_]+", text.lower(), flags=re.UNICODE))
-    best_lang = 'en-us'
+    tokens = set(_TOKEN_RE.findall(text.lower().translate(_APOSTROPHES)))
+    best_lang = None
     best_score = 0
     for lang, words in _LATIN_HINTS.items():
         score = sum(1 for w in words if w in tokens)
@@ -128,6 +189,13 @@ def _detect_language(text: str, lang_code: str = None) -> str:
             best_score = score
             best_lang = lang
     return best_lang
+
+
+def _detect_language(text: str, lang_code: str = None) -> str:
+    """Detected language, defaulting to English when nothing else matches."""
+    if lang_code:
+        return lang_code
+    return _detect_language_or_none(text) or 'en-us'
 
 
 def _make_handoff_cb(speech: 'Speech', sample_rate: int):
@@ -275,6 +343,10 @@ class Speech(GstSpeechPlayer):
             'ar': ('r', 'hf_alpha'), 'sw': ('w', 'hf_alpha'),
             'qu': ('q', 'hf_alpha'), 'gn': ('g', 'hf_alpha'),
         }
+
+        # Language pinned by the selected persona, consulted only when the
+        # text itself is too short/ambiguous to identify. See set_language_hint.
+        self._language_hint = None
 
         self._backend_failures = {}
         self._backend_lock = threading.Lock()
@@ -488,6 +560,39 @@ class Speech(GstSpeechPlayer):
     def get_addon_kokoro_voices(self) -> List[str]:
         default = self.get_default_kokoro_voices()
         return [v for v in self.kokoro_voices if v not in default]
+
+    def get_supported_languages(self) -> List[tuple]:
+        """Languages the activity can speak, as (tier, code, name, endonym).
+
+        Grouped in tier order for the language palette. See SUPPORTED_LANGUAGES
+        for the data and why routing does not depend on it.
+        """
+        return list(SUPPORTED_LANGUAGES)
+
+    def get_language_voice(self, lang_code: str) -> Optional[str]:
+        """Default Kokoro voice for a language, or None if it has none.
+
+        Languages carried by Piper or MMS have no Kokoro voice embedding, so
+        callers get None and should leave the current voice alone rather than
+        substituting one — the backend for those is picked from the detected
+        language at synthesis time, not from a voice.
+        """
+        return self._kokoro_lang_map.get(lang_code, (None, None))[1]
+
+    def set_language_hint(self, lang_code: Optional[str]):
+        """Pin the language for text that is too short to detect.
+
+        A persona that answers in Spanish can legitimately reply just "Sí." —
+        two letters of Latin script with no hint word in them, which detection
+        can only score as English. Speaking that with an English voice is the
+        one case where auto-detection reliably gets a real answer wrong.
+
+        The hint only fills in where the text says nothing either way. Text
+        that positively identifies as some language still wins, so selecting
+        the Spanish persona and then typing English still speaks English.
+        Pass None to go back to pure auto-detection.
+        """
+        self._language_hint = lang_code
 
     def get_available_backends(self, lang_code: str) -> dict:
         result = {'kokoro': KOKORO_AVAILABLE and self.kokoro_pipeline is not None}
@@ -796,7 +901,8 @@ class Speech(GstSpeechPlayer):
                 return
             text = text.strip()
 
-            detected = _detect_language(text)
+            detected = (_detect_language_or_none(text)
+                        or self._language_hint or 'en-us')
             pl_code, mapped_voice = self._kokoro_lang_map.get(detected, (None, None))
             speed = 1.0
 

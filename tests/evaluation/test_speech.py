@@ -92,7 +92,12 @@ class TestLanguageHints(unittest.TestCase):
 
     def test_guarani_hints(self):
         self.assertIn('gn', _LATIN_HINTS)
-        self.assertIn('mba\'echu', _LATIN_HINTS['gn'])
+        # Was pinned to 'mba\'echu', which is a misspelling of the greeting
+        # and could never match anyway: the tokeniser split on the apostrophe,
+        # so no Guarani hint containing one was reachable. Assert the corrected
+        # spelling instead. test_language_detection.py checks the general
+        # property that every hint survives tokenisation.
+        self.assertIn('mba\'éichapa', _LATIN_HINTS['gn'])
 
 
 if __name__ == '__main__':
