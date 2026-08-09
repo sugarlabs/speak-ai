@@ -725,8 +725,14 @@ class Speech(GstSpeechPlayer):
                 self._schedule_word_clear_at(start, pushed_seconds)
             return waveform_chunks
 
-        except Exception as e:
-            logger.error(f"Error in Kokoro audio streaming: {e}")
+        except Exception:
+            # logger.exception rather than logger.error so the traceback
+            # survives — carried over from upstream e490cfc (#68). That commit
+            # also hoisted `appsrc = None` above the try to avoid an
+            # UnboundLocalError in this handler; here the name is bound by
+            # re-fetching it from the pipeline instead, which additionally
+            # covers the case where _build_pipeline itself was what threw.
+            logger.exception("Error in Kokoro audio streaming")
             appsrc = self.pipeline.get_by_name('kokoro_src') if self.pipeline else None
             if appsrc:
                 try:
