@@ -15,6 +15,13 @@ numpy
 transformers
 huggingface_hub
 
+# Arabic and Swahili list Piper ahead of Kokoro in LANGUAGE_BACKEND_PREFERENCE,
+# so without this the language palette advertises "Neural (Piper)" for them
+# while get_tts_backend() quietly falls through to Kokoro cross-lingual. That
+# fallback is deliberate and safe, but it should not be what a default install
+# gets.
+piper-tts
+
 # G2P. misaki pulls espeak-ng through phonemizer, and num2words for expanding
 # numerals before they reach the phonemiser. espeakng_loader supplies the
 # espeak data path so it works without a system-wide ESPEAK_DATA_PATH.

@@ -41,7 +41,9 @@ class MMSTTSBackend(FallbackTTSBackend):
     """
 
     SUPPORTED_LANGUAGES = {
-        'qu': {'model': 'facebook/mms-tts-que', 'name': 'Quechua', 'sr': 16000},
+        # Cusco Quechua. facebook/mms-tts-que does not exist; MMS uses the
+        # ISO 639-3 code quz for the Quechua checkpoint that actually ships.
+        'qu': {'model': 'facebook/mms-tts-quz', 'name': 'Quechua', 'sr': 16000},
         'gn': {'model': 'facebook/mms-tts-grn', 'name': 'Guarani', 'sr': 16000},
         'ay': {'model': 'facebook/mms-tts-ayr', 'name': 'Aymara', 'sr': 16000},
         'sw': {'model': 'facebook/mms-tts-swh', 'name': 'Swahili', 'sr': 16000},
@@ -146,7 +148,10 @@ class PiperBackend(FallbackTTSBackend):
         if not text or not text.strip():
             return _EMPTY_WAVEFORM, self.config['sr']
         self._ensure_loaded()
-        raw = b"".join(self._engine.synthesize_stream_raw(text))
+        # piper-tts 1.5.x returns an iterable of AudioChunk (one per sentence)
+        # from synthesize(). The old synthesize_stream_raw() that streamed raw
+        # int16 bytes was removed, so join the chunks' int16 bytes instead.
+        raw = b"".join(chunk.audio_int16_bytes for chunk in self._engine.synthesize(text))
         waveform = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
         return waveform, self.config['sr']
 
