@@ -1,4 +1,22 @@
 #!/usr/bin/env python3
+# Speak.activity
+# This file is part of Speak.activity
+#
+# Copyright (C) 2026  NSA Raiyyan <f20241312@pilani.bits-pilani.ac.in>
+#
+#     Speak.activity is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+#
+#     Speak.activity is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+#
+#     You should have received a copy of the GNU General Public License
+#     along with Speak.activity.  If not, see <http://www.gnu.org/licenses/>.
+
 """Fill in the sha256 fields in MANIFEST.json by actually downloading each model.
 
 Hashes in MANIFEST.json are intentionally never hand-written. A hash typed by a
