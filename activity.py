@@ -1,26 +1,28 @@
-# Speak.activity
-# A simple front end to the espeak text-to-speech engine on the XO laptop
-# http://wiki.laptop.org/go/Speak
+# SpeakAI.activity
+# SpeakAI is a talking face. Anything you type will be spoken aloud using a text-to-speech model.
 #
 # Copyright (C) 2008  Joshua Minor
 # Copyright (C) 2014  Walter Bender (major refactoring)
-# This file is part of Speak.activity
+# Copyright (C) 2026  Mebin J Thattil (transition to SpeakAI, new TTS, SLM and LLM integration)
+# This file is part of SpeakAI.activity
+# 
 #
-# Parts of Speak.activity are based on code from Measure.activity
+# SpeakAI.activity is based on the Speak.activity
+# Parts of SpeakAI.activity are based on code from Measure.activity
 # Copyright (C) 2007  Arjun Sarwal - arjun@laptop.org
 #
-#     Speak.activity is free software: you can redistribute it and/or modify
+#     SpeakAI.activity is free software: you can redistribute it and/or modify
 #     it under the terms of the GNU General Public License as published by
 #     the Free Software Foundation, either version 3 of the License, or
 #     (at your option) any later version.
 #
-#     Speak.activity is distributed in the hope that it will be useful,
+#     SpeakAI.activity is distributed in the hope that it will be useful,
 #     but WITHOUT ANY WARRANTY; without even the implied warranty of
 #     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #     GNU General Public License for more details.
 #
 #     You should have received a copy of the GNU General Public License
-#     along with Speak.activity.  If not, see <http://www.gnu.org/licenses/>.
+#     along with SpeakAI.activity.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
 import os
@@ -93,7 +95,7 @@ try:
 except ImportError:
     USING_BRAIN = True
 
-from LLM import is_connected, ask_llm_prompted, DEFAULT_PROMPT
+from LLM import is_connected, ask_llm_prompted, DEFAULT_PROMPT, save_api_key, reload_api_key, API_KEY
 from GenAI import is_profane
 
 SERVICE = 'org.sugarlabs.Speak'
@@ -178,9 +180,10 @@ def _is_tablet_mode():
     return False
 
 
-class SpeakActivity(activity.Activity):
+
+class SpeakAIActivity(activity.Activity):
     def __init__(self, handle):
-        super(SpeakActivity, self).__init__(handle)
+        super(SpeakAIActivity, self).__init__(handle)
 
         self._notebook = Gtk.Notebook()
         self.set_canvas(self._notebook)
@@ -205,6 +208,9 @@ class SpeakActivity(activity.Activity):
         with open('personas.json', 'r') as f:
             self._personas = json.load(f)
         self._current_persona = 'Jane'
+
+        # Check for API key and prompt if not found
+        self._check_api_key()
 
         # make an audio device for playing back and rendering audio
         self.connect('notify::active', self._active_cb)
@@ -418,6 +424,61 @@ class SpeakActivity(activity.Activity):
                                        % self.owner.props.nick)
         self._set_idle_phrase(speak=False)
         self._first_time = False
+
+    def _check_api_key(self):
+        """Check if API key exists, prompt user to enter one if not."""
+        def _show_api_key_dialog(parent):
+            """Show a dialog to input the API key. Returns the key or None if cancelled."""
+            dialog = Gtk.Dialog(
+                title=_("Enter SugarAI API Key"),
+                parent=parent,
+                modal=True,
+                destroy_with_parent=True
+            )
+            dialog.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
+            dialog.add_button(_("Add"), Gtk.ResponseType.OK)
+            dialog.set_default_response(Gtk.ResponseType.OK)
+
+            content_area = dialog.get_content_area()
+            content_area.set_spacing(10)
+            content_area.set_margin_start(20)
+            content_area.set_margin_end(20)
+            content_area.set_margin_top(20)
+            content_area.set_margin_bottom(10)
+
+            # Message label
+            label = Gtk.Label()
+            label.set_markup(_("<b>API Key not found</b>\n\nPlease enter your SugarAI API key for better responses:"))
+            label.set_line_wrap(True)
+            label.set_justify(Gtk.Justification.CENTER)
+            content_area.pack_start(label, False, False, 0)
+
+            # API key entry
+            entry = Gtk.Entry()
+            entry.set_placeholder_text(_("Enter API key here..."))
+            entry.set_visibility(True)
+            entry.set_activates_default(True)
+            content_area.pack_start(entry, False, False, 0)
+
+            dialog.show_all()
+            response = dialog.run()
+            api_key = entry.get_text().strip() if response == Gtk.ResponseType.OK else None
+            dialog.destroy()
+
+            return api_key
+
+        if API_KEY is None:
+            # Use GLib.idle_add to show dialog after main loop starts
+            def show_dialog():
+                api_key = _show_api_key_dialog(self)
+                if api_key:
+                    if save_api_key(api_key):
+                        reload_api_key()
+                        logger.info("API key saved successfully")
+                    else:
+                        logger.error("Failed to save API key")
+                return False  # Don't repeat
+            GLib.idle_add(show_dialog)
 
     def read_file(self, file_path):
         self._cfg = json.loads(open(file_path, 'r').read())
@@ -796,10 +857,16 @@ class SpeakActivity(activity.Activity):
         return facebar
 
     def _make_kokoro(self):
+        def _format_voice_display_name(voice_name):
+            '''Format voice name for display by removing the prefix (e.g., af_heart -> heart)'''
+            if '_' in voice_name and len(voice_name) > 3:
+                return voice_name[3:]
+            return voice_name
+
         self._kokoro_voice_evboxes = {}
         self._kokoro_voice_box = Gtk.VBox()
 
-        # Add heading for DEFAULT VOICES
+        # Add heading for DEFAULT VOICES(heart, alloy and aoede)
         default_heading = Gtk.Label()
         default_heading.set_markup('<b>DEFAULT VOICES</b>')
         default_heading.set_justify(Gtk.Justification.CENTER)
@@ -816,7 +883,8 @@ class SpeakActivity(activity.Activity):
             label = Gtk.Label()
             label.set_use_markup(True)
             label.set_justify(Gtk.Justification.LEFT)
-            label.set_markup('<span size="large">%s</span>' % voice_name)
+            display_name = _format_voice_display_name(voice_name)
+            label.set_markup('<span size="large">%s</span>' % display_name)
             alignment = Gtk.Alignment.new(0, 0, 0, 0)
             alignment.add(label)
             label.show()
@@ -857,7 +925,8 @@ class SpeakActivity(activity.Activity):
             label = Gtk.Label()
             label.set_use_markup(True)
             label.set_justify(Gtk.Justification.LEFT)
-            label.set_markup('<span size="large">%s</span>' % voice_name)
+            display_name = _format_voice_display_name(voice_name)
+            label.set_markup('<span size="large">%s</span>' % display_name)
             alignment = Gtk.Alignment.new(0, 0, 0, 0)
             alignment.add(label)
             label.show()
@@ -964,12 +1033,12 @@ class SpeakActivity(activity.Activity):
                     try:
                         import huggingface_hub
                         repo_id = kokoro_pipeline.repo_id
-                        message = _('This voice is being downloaded, please wait')
+                        message = _('Getting my new voice ready...')
                         info_label.set_markup('<span foreground="blue" size="large">%s</span>' % message)
                         voice_path = huggingface_hub.hf_hub_download(
                             repo_id=repo_id,
                             filename=f'voices/{voice_name}.pt',
-                            cache_dir=None,
+                            cache_dir=os.path.join(activity.get_activity_root(), 'data', 'kokoro_cache'),
                             force_download=False,
                             resume_download=False
                         )
@@ -978,7 +1047,7 @@ class SpeakActivity(activity.Activity):
                         message = _('Hugging Face Hub is not installed')
                         info_label.set_markup('<span foreground="red" size="large">%s</span>' % message)
                     except huggingface_hub.errors.LocalEntryNotFoundError:
-                        message = _("Can't download voice as there's no internet connection")
+                        message = _("I need to be connected to the internet to get new voices...")
                         info_label.set_markup('<span foreground="red" size="large">%s</span>' % message)
             else:
                 is_local = True
@@ -994,7 +1063,7 @@ class SpeakActivity(activity.Activity):
 
                 # Actually set the voice (may trigger download from Hugging Face Hub)
                 speech.get_speech().set_kokoro_voice(voice_name)
-                self.face.say_notification(_('Kokoro voice changed'))
+                self.face.say_notification(_('This is my new voice!'))
 
             while Gtk.events_pending():
                 Gtk.main_iteration()

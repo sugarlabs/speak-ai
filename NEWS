@@ -1,3 +1,14 @@
+1 (Transition to Speak-AI)
+
+* Replace speech synthesizer with Kokoro (text-to-speech model) (Mebin J Thattil),
+* Replace Brain with LlaMA-135 (fine-tuned small language model) (Mebin J Thattil),
+* Replace Brain with LLM (SugarAI) if connected to internet and service available (Mebin J Thattil),
+* Updated activity icon and screenshots (Mebin J Thattil),
+
+
+---
+
+
 59
 
 * Fix saving photo (Martin Abente Lahaye),
