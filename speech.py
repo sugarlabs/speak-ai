@@ -62,7 +62,7 @@ class Speech(GstSpeechPlayer):
         self.kokoro_voices = [
             'af_heart', 'af_alloy', 'af_aoede', 'af_bella', 'af_jessica', 'af_kore', 'af_nicole',
             'af_nova', 'af_river', 'af_sarah', 'af_sky','am_adam', 'am_echo', 'am_eric', 'am_fenrir',
-            'am_adam', 'am_echo', 'am_eric', 'am_fenrir', 'am_liam', 'am_michael', 'am_onyx',
+            'am_liam', 'am_michael', 'am_onyx',
             'am_puck', 'am_santa', 'bf_alice', 'bf_emma', 'bf_isabella', 'bf_lily', 'bm_daniel',
             'bm_fable', 'bm_george', 'bm_lewis', 'jf_alpha', 'jf_gongitsune', 'jf_nezumi', 'jf_tebukuro',
             'jm_kumo', 'zf_xiaobei', 'zf_xiaoni', 'zf_xiaoxiao', 'zf_xiaoyi', 'zm_yunjian',
@@ -326,6 +326,7 @@ class Speech(GstSpeechPlayer):
 
     def _stream_kokoro_audio(self, text, voice):
         """Stream Kokoro audio chunks to the GStreamer pipeline"""
+        appsrc = None
         try:
             # Getting the appsrc element
             appsrc = self.pipeline.get_by_name('kokoro_src')
@@ -357,9 +358,9 @@ class Speech(GstSpeechPlayer):
 
             appsrc.emit("end-of-stream") # Signal EOS
             
-        except Exception as e:
+        except Exception:
             # Signalling EOS here as well, but I'm adding error to logs
-            logger.error(f"Error in Kokoro audio streaming: {e}")
+            logger.exception("Error in Kokoro audio streaming")
             if appsrc:
                 appsrc.emit("end-of-stream")
 
