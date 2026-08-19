@@ -53,6 +53,13 @@ except ImportError:
     TTS_CACHE_AVAILABLE = False
     logger.debug("TTS cache not available")
 
+try:
+    from model_manager import ModelManager
+    MODEL_MANAGER_AVAILABLE = True
+except ImportError:
+    MODEL_MANAGER_AVAILABLE = False
+    logger.debug("Model manager not available")
+
 PITCH_MIN = 0
 PITCH_MAX = 200
 RATE_MIN = 0
@@ -293,14 +300,31 @@ class Speech(GstSpeechPlayer):
         GstSpeechPlayer.__init__(self)
         self.pipeline = None
 
+        # Whether this machine has the RAM to hold a neural model at all.
+        # Checked before Kokoro is loaded and before any alt backend is built,
+        # because both would otherwise be an OOM kill in the middle of a
+        # lesson, which is worse for the child than a robotic voice. Cheap to
+        # construct: __init__ only reads total RAM, it does not touch the
+        # manifest or the disk.
+        self._model_manager = ModelManager() if MODEL_MANAGER_AVAILABLE else None
+        self._neural_allowed = (
+            self._model_manager.neural_allowed
+            if self._model_manager is not None else True)
+
         self.kokoro_pipeline = None
         self._kokoro_model = None
         self._kokoro_pipelines = {}
         self._kokoro_pipelines_lock = threading.Lock()
         self._kokoro_ready = threading.Event()
         self._kokoro_failed = False
-        if KOKORO_AVAILABLE:
+        if KOKORO_AVAILABLE and self._neural_allowed:
             threading.Thread(target=self._setup_kokoro, daemon=True).start()
+        elif KOKORO_AVAILABLE:
+            # Nothing will ever set _kokoro_ready, so mark the load failed
+            # rather than leaving _speak_impl to burn its 30 second wait on
+            # every utterance before falling back.
+            self._kokoro_failed = True
+            self._kokoro_ready.set()
 
         self.kokoro_voices = [
             'af_heart', 'af_alloy', 'af_aoede', 'af_bella', 'af_jessica', 'af_kore', 'af_nicole',
@@ -596,7 +620,9 @@ class Speech(GstSpeechPlayer):
 
     def get_available_backends(self, lang_code: str) -> dict:
         result = {'kokoro': KOKORO_AVAILABLE and self.kokoro_pipeline is not None}
-        if ALT_BACKENDS_AVAILABLE:
+        # A backend the RAM gate will refuse to build is not available, however
+        # much the language tables say it supports this language.
+        if ALT_BACKENDS_AVAILABLE and self._neural_allowed:
             try:
                 from alt_tts_backends import MMSTTSBackend as _MMSTTS, PiperBackend as _Piper
                 if lang_code in _MMSTTS.SUPPORTED_LANGUAGES:
@@ -612,6 +638,9 @@ class Speech(GstSpeechPlayer):
         return {
             'kokoro_available': KOKORO_AVAILABLE and self.kokoro_pipeline is not None,
             'alt_backends_available': ALT_BACKENDS_AVAILABLE,
+            'neural_allowed': self._neural_allowed,
+            'ram_mb': (self._model_manager.available_ram_mb
+                       if self._model_manager is not None else None),
             'cache_available': self._tts_cache is not None,
             'cache_stats': self._tts_cache.stats if self._tts_cache else None,
             'current_backend': self._current_backend_type,
@@ -848,6 +877,15 @@ class Speech(GstSpeechPlayer):
 
     def _get_backend_for_lang(self, lang_code: str):
         if not ALT_BACKENDS_AVAILABLE:
+            return None
+
+        # Piper and MMS both load a neural model into memory, so they are
+        # gated on the same RAM check as Kokoro. Returning None here routes the
+        # language to espeak instead of to a backend the machine cannot hold.
+        if not self._neural_allowed:
+            logger.debug(
+                "Skipping alt backend for %s: not enough RAM for neural TTS",
+                lang_code)
             return None
 
         with self._backend_lock:

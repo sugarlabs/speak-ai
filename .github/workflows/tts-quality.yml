@@ -103,3 +103,8 @@ jobs:
       # distinguishable from English. Read via ast, so no torch.
       - name: Language detection
         run: pytest tests/evaluation/test_language_detection.py -q
+
+      # That speech.py actually consults the low-RAM gate before building a
+      # neural backend. gi/sugar3 are stubbed, so no GStreamer needed.
+      - name: Low-RAM gate wiring
+        run: pytest tests/evaluation/test_ram_gate.py -q
