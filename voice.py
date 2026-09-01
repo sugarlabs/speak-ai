@@ -169,9 +169,6 @@ def defaultVoice():
         _friendly_name("Default"),  # espeak 1.48
     ]
 
-    if not voices:
-        return None
-
     best = None
     for voice_name in voice_names:
         if voice_name in voices:
