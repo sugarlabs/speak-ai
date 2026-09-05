@@ -60,6 +60,26 @@ except ImportError:
     MODEL_MANAGER_AVAILABLE = False
     logger.debug("Model manager not available")
 
+try:
+    from speech_utils import (
+        normalize_text, segment_by_script, is_mixed_script,
+    )
+    from speech_utils.codeswitch import BOUNDARY_SILENCE_MS
+    SPEECH_UTILS_AVAILABLE = True
+except ImportError:
+    SPEECH_UTILS_AVAILABLE = False
+    BOUNDARY_SILENCE_MS = 50
+    logger.debug("speech_utils not available; skipping normalization")
+
+    def normalize_text(text, lang_code='en-us'):
+        return text
+
+    def segment_by_script(text, base_lang='en-us'):
+        return [(base_lang, text)] if text else []
+
+    def is_mixed_script(text, base_lang='en-us'):
+        return False
+
 PITCH_MIN = 0
 PITCH_MAX = 200
 RATE_MIN = 0
@@ -203,6 +223,27 @@ def _detect_language(text: str, lang_code: str = None) -> str:
     if lang_code:
         return lang_code
     return _detect_language_or_none(text) or 'en-us'
+
+
+def _resample_linear(wave: numpy.ndarray, src_sr: int,
+                     dst_sr: int) -> numpy.ndarray:
+    """Resample by linear interpolation, for stitching mixed-script segments.
+
+    Only ever called to resample *up* to the highest rate among the segments
+    being joined, which is what keeps this honest: linear interpolation
+    aliases when downsampling, but upsampling only softens the top octave.
+    That is an acceptable trade for not adding scipy to a dependency list
+    that already costs 1.7 GB installed, especially since the alternative is
+    GStreamer renegotiating its caps mid-utterance.
+    """
+    if len(wave) == 0 or src_sr == dst_sr:
+        return wave
+    n_out = int(round(len(wave) * dst_sr / float(src_sr)))
+    if n_out <= 0:
+        return numpy.zeros(0, dtype=numpy.float32)
+    positions = numpy.linspace(0, len(wave) - 1, n_out)
+    return numpy.interp(
+        positions, numpy.arange(len(wave)), wave).astype(numpy.float32)
 
 
 def _make_handoff_cb(speech: 'Speech', sample_rate: int):
@@ -917,6 +958,132 @@ class Speech(GstSpeechPlayer):
         with self._backend_lock:
             self._backend_failures.pop(lang_code, None)
 
+    def _kokoro_usable(self) -> bool:
+        """Whether Kokoro can synthesize *right now*, without waiting for it.
+
+        Deliberately non-blocking. This used to be a 30 second
+        `_kokoro_ready.wait()`, which meant that during the measured 44 second
+        cold start the first thing a child got after pressing Speak was half a
+        minute of nothing, and only then a robotic voice. Silence reads as a
+        broken activity; espeak reads as a cheap voice that gets better. The
+        model keeps loading on its background thread either way, and the next
+        utterance picks it up.
+        """
+        return (KOKORO_AVAILABLE
+                and not self._kokoro_failed
+                and self._kokoro_ready.is_set()
+                and self._kokoro_model is not None)
+
+    def _synthesize_kokoro_waveform(self, text: str, voice: str,
+                                    pl_code: str) -> Optional[numpy.ndarray]:
+        """Kokoro audio as one array, with no GStreamer involvement.
+
+        _stream_kokoro_audio pushes to the pipeline as it generates, which is
+        right for a single-language utterance. Stitching mixed-script segments
+        needs the samples in hand before anything is played, so this is the
+        same synthesis without the streaming.
+        """
+        try:
+            pipeline = self._get_kokoro_pipeline(pl_code)
+            chunks = [audio.numpy() for _gs, _ps, audio in
+                      pipeline(text, voice=voice)]
+            if not chunks:
+                return None
+            return numpy.concatenate(chunks)
+        except Exception as e:
+            logger.warning("Kokoro segment synthesis failed for %r: %s",
+                           text[:40], e)
+            return None
+
+    def _synthesize_segment(self, text: str, lang: str):
+        """One code-switched segment as (waveform, sample_rate).
+
+        Returns (None, None) when the segment cannot be synthesized at all,
+        which the caller treats as "abandon the mixed path" rather than
+        "speak the rest" — half a sentence is worse than a whole one in one
+        slightly wrong voice.
+        """
+        pl_code, mapped_voice = self._kokoro_lang_map.get(lang, (None, None))
+        backend = self._get_backend_for_lang(lang)
+        speed = 1.0
+        cache_key = self._cache_voice_key(lang, pl_code, backend)
+
+        if self._tts_cache is not None:
+            cached, cached_sr = self._tts_cache.get(text, cache_key, lang, speed)
+            if cached is not None:
+                return cached, (cached_sr or _DEFAULT_SAMPLE_RATE)
+
+        if backend is not None:
+            try:
+                waveform, actual_sr = backend.synthesize(text)
+                if waveform is not None and len(waveform) > 0:
+                    sr = int(actual_sr) if actual_sr else int(backend.sample_rate)
+                    self._record_backend_success(lang)
+                    if self._tts_cache is not None:
+                        try:
+                            self._tts_cache.put(text, cache_key, lang, speed,
+                                                waveform, sr)
+                        except Exception:
+                            pass
+                    return waveform, sr
+                self._record_backend_failure(lang)
+            except Exception as e:
+                logger.warning("Alt backend failed for segment (%s): %s", lang, e)
+                self._record_backend_failure(lang)
+
+        if self._kokoro_usable() and pl_code is not None:
+            voice = (self.current_kokoro_voice if pl_code == 'a'
+                     else mapped_voice)
+            waveform = self._synthesize_kokoro_waveform(text, voice, pl_code)
+            if waveform is not None and len(waveform) > 0:
+                if self._tts_cache is not None:
+                    try:
+                        self._tts_cache.put(text, cache_key, lang, speed,
+                                            waveform, _KOKORO_SR)
+                    except Exception:
+                        pass
+                return waveform, _KOKORO_SR
+
+        return None, None
+
+    def _speak_mixed(self, text: str, segments) -> bool:
+        """Speak one utterance that changes language partway through.
+
+        Each run is synthesized by its own backend, resampled to a common
+        rate, and joined with a short silence so the two voices do not run
+        into each other. Returns False if any segment could not be produced,
+        leaving the caller to speak the whole string the ordinary way.
+        """
+        pieces = []
+        for lang, segment_text in segments:
+            waveform, sr = self._synthesize_segment(segment_text, lang)
+            if waveform is None or len(waveform) == 0:
+                logger.debug("Mixed-script synthesis gave up on %r (%s)",
+                             segment_text[:40], lang)
+                return False
+            pieces.append((waveform, sr))
+
+        target_sr = max(sr for _w, sr in pieces)
+        gap = numpy.zeros(int(target_sr * BOUNDARY_SILENCE_MS / 1000.0),
+                          dtype=numpy.float32)
+
+        joined = []
+        for index, (waveform, sr) in enumerate(pieces):
+            if index:
+                joined.append(gap)
+            joined.append(_resample_linear(waveform, sr, target_sr))
+        full = numpy.concatenate(joined).astype(numpy.float32)
+
+        self._current_sample_rate = target_sr
+        self._current_backend_type = 'mixed'
+        self._build_pipeline('audio_src', target_sr)
+        self.restart_sound_device()
+        self._push_waveform_to_appsrc(full, target_sr, text)
+        logger.debug("Spoke %d-segment mixed utterance at %dHz (%s)",
+                     len(segments), target_sr,
+                     ', '.join(lang for lang, _t in segments))
+        return True
+
     def speak(self, status, text: str):
         # Runs the real work on a background thread. speak() used to block
         # the caller (GTK main thread) for the whole synthesis+playback
@@ -937,12 +1104,23 @@ class Speech(GstSpeechPlayer):
         try:
             if not text or not text.strip():
                 return
-            text = text.strip()
+            # Normalize before detecting, not after: the hint tokeniser is
+            # what NFC composition protects. Decomposed "¿Cómo está usted?"
+            # matches no Spanish hint at all and is read out in English.
+            text = normalize_text(text.strip())
 
             detected = (_detect_language_or_none(text)
                         or self._language_hint or 'en-us')
             pl_code, mapped_voice = self._kokoro_lang_map.get(detected, (None, None))
             speed = 1.0
+
+            # 0. Code-switched input ("मेरा name है Rahul"), which no single
+            # G2P engine can pronounce. Falls through to the ordinary path if
+            # any segment fails, so this can only add correct pronunciations,
+            # never take one away.
+            segments = segment_by_script(text, detected)
+            if len(segments) > 1 and self._speak_mixed(text, segments):
+                return
 
             # 1. Dedicated backend (Piper/MMS) where a language prefers one.
             backend = self._get_backend_for_lang(detected)
@@ -988,32 +1166,34 @@ class Speech(GstSpeechPlayer):
                     self._record_backend_failure(detected)
 
             # 2. Kokoro with the language-appropriate pipeline and voice.
-            if (KOKORO_AVAILABLE and not self._kokoro_failed
-                    and pl_code is not None):
+            if self._kokoro_usable() and pl_code is not None:
                 try:
-                    self._kokoro_ready.wait(timeout=30)
-                    if self._kokoro_model is not None:
-                        # English respects the user/persona-selected voice;
-                        # other languages use their mapped native voice.
-                        voice = (self.current_kokoro_voice if pl_code == 'a'
-                                 else mapped_voice)
-                        self._current_sample_rate = _KOKORO_SR
-                        self._current_backend_type = 'kokoro'
-                        chunks = self._stream_kokoro_audio(text, voice, pl_code)
-                        if chunks:
-                            if self._tts_cache is not None:
-                                try:
-                                    full = numpy.concatenate(chunks)
-                                    self._tts_cache.put(text, cache_key, detected,
-                                                        speed, full, _KOKORO_SR)
-                                except Exception:
-                                    pass
-                            logger.debug(
-                                f"Speaking via Kokoro ({voice}, pl={pl_code}) "
-                                f"for lang={detected}")
-                            return
+                    # English respects the user/persona-selected voice;
+                    # other languages use their mapped native voice.
+                    voice = (self.current_kokoro_voice if pl_code == 'a'
+                             else mapped_voice)
+                    self._current_sample_rate = _KOKORO_SR
+                    self._current_backend_type = 'kokoro'
+                    chunks = self._stream_kokoro_audio(text, voice, pl_code)
+                    if chunks:
+                        if self._tts_cache is not None:
+                            try:
+                                full = numpy.concatenate(chunks)
+                                self._tts_cache.put(text, cache_key, detected,
+                                                    speed, full, _KOKORO_SR)
+                            except Exception:
+                                pass
+                        logger.debug(
+                            f"Speaking via Kokoro ({voice}, pl={pl_code}) "
+                            f"for lang={detected}")
+                        return
                 except Exception as e:
                     logger.warning(f"Kokoro failed for {detected}: {e}")
+            elif (KOKORO_AVAILABLE and not self._kokoro_failed
+                    and not self._kokoro_ready.is_set()):
+                logger.debug(
+                    "Kokoro still loading; speaking %s with the espeak "
+                    "placeholder and leaving the load running", detected)
 
             # 3. espeak fallback (unsupported language or Kokoro unavailable).
             self._build_pipeline('espeak', _ESPEAK_SR)
@@ -1033,9 +1213,16 @@ class Speech(GstSpeechPlayer):
         if not text or not text.strip():
             return
 
-        text = text.strip()
+        text = normalize_text(text.strip(), lang_code or 'en-us')
         detected = _detect_language(text, lang_code)
         speed = 1.0
+
+        # An explicit lang_code is a caller pinning the language, so honour it
+        # rather than re-splitting the text underneath them.
+        if lang_code is None:
+            segments = segment_by_script(text, detected)
+            if len(segments) > 1 and self._speak_mixed(text, segments):
+                return
 
         backend = self._get_backend_for_lang(detected)
         pl_code = self._kokoro_lang_map.get(detected, ('a', None))[0]
@@ -1078,26 +1265,24 @@ class Speech(GstSpeechPlayer):
                 logger.warning(f"Alt backend failed for {detected}: {e}")
                 self._record_backend_failure(detected)
 
-        if KOKORO_AVAILABLE and not self._kokoro_failed:
+        if self._kokoro_usable():
             try:
-                self._kokoro_ready.wait(timeout=30)
-                if self._kokoro_model is not None:
-                    pl_code, mapped_voice = self._kokoro_lang_map.get(
-                        detected, ('a', self.current_kokoro_voice))
-                    kokoro_voice = voice or mapped_voice
-                    self._current_sample_rate = _KOKORO_SR
-                    self._current_backend_type = 'kokoro'
-                    waveform_chunks = self._stream_kokoro_audio(
-                        text, kokoro_voice, pl_code)
-                    if waveform_chunks:
-                        if self._tts_cache is not None:
-                            try:
-                                full_waveform = numpy.concatenate(waveform_chunks)
-                                self._tts_cache.put(text, cache_key, detected, speed, full_waveform, _KOKORO_SR)
-                            except Exception:
-                                pass
-                        logger.debug(f"Speaking via Kokoro ({kokoro_voice}) for lang={detected}")
-                        return
+                pl_code, mapped_voice = self._kokoro_lang_map.get(
+                    detected, ('a', self.current_kokoro_voice))
+                kokoro_voice = voice or mapped_voice
+                self._current_sample_rate = _KOKORO_SR
+                self._current_backend_type = 'kokoro'
+                waveform_chunks = self._stream_kokoro_audio(
+                    text, kokoro_voice, pl_code)
+                if waveform_chunks:
+                    if self._tts_cache is not None:
+                        try:
+                            full_waveform = numpy.concatenate(waveform_chunks)
+                            self._tts_cache.put(text, cache_key, detected, speed, full_waveform, _KOKORO_SR)
+                        except Exception:
+                            pass
+                    logger.debug(f"Speaking via Kokoro ({kokoro_voice}) for lang={detected}")
+                    return
             except Exception as e:
                 logger.warning(f"Kokoro failed for {detected}: {e}")
 
