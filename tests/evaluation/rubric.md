@@ -55,7 +55,24 @@ Native-speaker review happens at three points (proposal Weeks 2, 6, 11):
 ## Objective companion metric
 
 Human scoring covers naturalness, which no automated metric captures well. It
-is paired with an automated **Phoneme Error Rate** check (`tests/eval_<lang>.py`,
-per proposal §"Objective Benchmarking") so that a phonetic regression trips a
-test even between native-speaker rounds. The rubric answers "does it sound
-right"; PER answers "did the phonemes change". Both are needed.
+is paired with an automated **Phoneme Error Rate** check
+(`tests/evaluation/eval_per.py`, gated in CI by `test_per.py`) so that a
+phonetic regression trips a test even between native-speaker rounds. The
+rubric answers "does it sound right"; PER answers "did the phonemes change".
+Both are needed.
+
+```bash
+python tests/evaluation/eval_per.py                     # score every language
+python tests/evaluation/eval_per.py --lang hi           # one language
+python tests/evaluation/eval_per.py --update-reference  # re-snapshot
+```
+
+Read the threshold honestly. The reference is a committed snapshot of this
+project's own G2P output (`tests/evaluation/reference/<lang>.ipa`), reviewed
+when it was taken — not a gold-standard transcription. 0% PER therefore means
+"nothing moved since that review", not "the phonemes are correct". Correctness
+is what the native-speaker rounds above are for.
+
+Covers the eight languages whose G2P goes through espeak-ng. English and
+Mandarin use misaki's own G2P; Kinyarwanda and Aymara have no espeak-ng voice
+at all and reach MMS-TTS with no phoneme stage to measure.
