@@ -88,17 +88,28 @@ def main():
     for name, entry in models.items():
         if wanted is not None and name not in wanted:
             continue
-        if entry.get('sha256') and not args.force:
-            print(f"[skip] {name} already hashed")
-            continue
 
-        print(f"[hash] {name}: {entry['url']}")
-        try:
-            entry['sha256'] = hash_url(entry['url'])
-            print(f"    -> {entry['sha256']}")
-            changed += 1
-        except Exception as e:
-            print(f"    FAILED: {e}", file=sys.stderr)
+        # The primary artefact and every companion file. Hashing only the
+        # weights would leave config.json and vocab.json unpinned, and a
+        # swapped vocab changes what the model says just as surely as swapped
+        # weights would.
+        targets = [(name, entry)] + [
+            (f"{name}:{extra['filename']}", extra)
+            for extra in entry.get('extra_files', [])
+        ]
+
+        for label, target in targets:
+            if target.get('sha256') and not args.force:
+                print(f"[skip] {label} already hashed")
+                continue
+
+            print(f"[hash] {label}: {target['url']}")
+            try:
+                target['sha256'] = hash_url(target['url'])
+                print(f"    -> {target['sha256']}")
+                changed += 1
+            except Exception as e:
+                print(f"    FAILED: {e}", file=sys.stderr)
 
     if changed:
         # Write via a temp file + rename so an interrupted run never leaves a

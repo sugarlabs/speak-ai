@@ -32,6 +32,44 @@ logger = logging.getLogger('speak')
 
 _EMPTY_WAVEFORM = np.array([], dtype=np.float32)
 
+_model_manager = None
+_model_manager_lock = threading.Lock()
+
+
+def _verified_model_dir(name):
+    """Verified local directory for `name`, or None to fetch from the hub.
+
+    None is the *expected* answer today. MANIFEST.json ships with empty
+    hashes on purpose — scripts/populate_manifest.py fills them from real
+    downloads, because a hash nobody verified is worse than no hash — and
+    ModelManager refuses to install anything it cannot verify. So until a
+    maintainer populates the manifest this returns None and both backends
+    fetch from HuggingFace exactly as they did before.
+
+    Wiring it now rather than after the hashes exist is the point: it makes
+    populating the manifest the only remaining step, instead of populating it
+    *and* then rewriting both loaders under a deadline.
+    """
+    global _model_manager
+    try:
+        from model_manager import ModelManager
+    except ImportError:
+        return None
+
+    try:
+        with _model_manager_lock:
+            if _model_manager is None:
+                _model_manager = ModelManager()
+        # Checked before calling get_dir so an unpinned language (most Piper
+        # voices) is a quiet fallback rather than a logged error.
+        if name not in _model_manager.manifest:
+            return None
+        return _model_manager.get_dir(name)
+    except Exception:
+        logger.debug("ModelManager could not provide %s; using the hub",
+                     name, exc_info=True)
+        return None
+
 
 class FallbackTTSBackend:
     """Base class for alternative TTS synthesizers."""
@@ -89,9 +127,16 @@ class MMSTTSBackend(FallbackTTSBackend):
             except ImportError as e:
                 raise ImportError(f"MMS requires 'transformers': {e}") from e
             name = self.config['model']
-            logger.debug("Loading MMS model: %s", name)
-            self._tokenizer = AutoTokenizer.from_pretrained(name)
-            self._model = VitsModel.from_pretrained(name)
+            # A verified local copy when the manifest is populated, the hub
+            # otherwise. from_pretrained takes either a repo id or a directory
+            # containing config.json + vocab.json + the tokenizer files, which
+            # is exactly what get_dir assembles.
+            local = _verified_model_dir(f'mms_{self.lang_code}')
+            source = str(local) if local is not None else name
+            logger.debug("Loading MMS model: %s (from %s)", name,
+                         "verified local copy" if local else "hub")
+            self._tokenizer = AutoTokenizer.from_pretrained(source)
+            self._model = VitsModel.from_pretrained(source)
             self._model.eval()
 
     def synthesize(self, text):
@@ -148,18 +193,32 @@ class PiperBackend(FallbackTTSBackend):
                 from piper import PiperVoice
             except ImportError as e:
                 raise ImportError(f"Piper requires 'piper-tts': {e}") from e
-            try:
-                from huggingface_hub import hf_hub_download
-            except ImportError as e:
-                raise ImportError(
-                    "Piper requires 'huggingface_hub': pip install huggingface_hub"
-                ) from e
+
             model_name = self.config['model']
-            logger.debug("Loading Piper model: %s", model_name)
-            parts = model_name.replace('-', '_').split('_')
-            base = f"{parts[0]}/{parts[0]}_{parts[1]}/{parts[2]}/{parts[3]}/{model_name}"
-            onnx = hf_hub_download("rhasspy/piper-voices", f"{base}.onnx")
-            cfg = hf_hub_download("rhasspy/piper-voices", f"{base}.onnx.json")
+
+            # PiperVoice.load needs the .onnx and the .onnx.json beside it,
+            # so both are pinned in the manifest and both come from get_dir.
+            local = _verified_model_dir(f'piper_{self.lang_code}')
+            if local is not None:
+                logger.debug("Loading Piper model: %s (verified local copy)",
+                             model_name)
+                onnx = str(local / f"{model_name}.onnx")
+                cfg = str(local / f"{model_name}.onnx.json")
+            else:
+                try:
+                    from huggingface_hub import hf_hub_download
+                except ImportError as e:
+                    raise ImportError(
+                        "Piper requires 'huggingface_hub': "
+                        "pip install huggingface_hub"
+                    ) from e
+                logger.debug("Loading Piper model: %s (hub)", model_name)
+                parts = model_name.replace('-', '_').split('_')
+                base = (f"{parts[0]}/{parts[0]}_{parts[1]}/"
+                        f"{parts[2]}/{parts[3]}/{model_name}")
+                onnx = hf_hub_download("rhasspy/piper-voices", f"{base}.onnx")
+                cfg = hf_hub_download("rhasspy/piper-voices", f"{base}.onnx.json")
+
             self._engine = PiperVoice.load(onnx, config_path=cfg)
 
     def synthesize(self, text):

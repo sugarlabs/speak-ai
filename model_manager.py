@@ -203,6 +203,45 @@ class ModelManager:
             self._record_failure(name, e)
             return None
 
+    def get_dir(self, name: str, allow_download=True,
+                progress_cb=None) -> Optional[Path]:
+        """Directory holding every file of `name`, each one verified.
+
+        Neither backend loads from a single file. Piper needs its .onnx and
+        the .onnx.json beside it; transformers needs config.json, vocab.json
+        and the tokenizer files next to model.safetensors. Verifying only the
+        weights would leave the rest unpinned, which defeats the point — a
+        swapped vocab.json changes what the model says just as surely as
+        swapped weights do.
+
+        Returns None if any file is missing or fails verification, so a
+        partially-assembled directory is never handed to a loader.
+        """
+        entry = self.manifest.get(name)
+        if entry is None:
+            logger.error("No manifest entry for model '%s'", name)
+            return None
+
+        primary = self.get(name, allow_download=allow_download,
+                           progress_cb=progress_cb)
+        if primary is None:
+            return None
+
+        directory = primary.parent
+        for extra in entry.get('extra_files', []):
+            path = directory / extra['filename']
+            if path.is_file():
+                continue
+            if not allow_download:
+                return None
+            try:
+                self._download_verified(extra, path)
+            except ModelUnavailable as e:
+                self._record_failure(f"{name}:{extra['filename']}", e)
+                return None
+
+        return directory
+
     def _download_verified(self, entry, dest: Path, progress_cb=None):
         """Download to .tmp, checksum it, then atomically rename into place."""
         url = entry['url']
