@@ -13,11 +13,14 @@ on:
   pull_request:
     paths:
       - 'speech.py'
+      - 'speech_utils/**'
       - 'kokoro/pipeline.py'
       - 'alt_tts_backends.py'
       - 'tts_cache.py'
       - 'model_manager.py'
       - 'MANIFEST.json'
+      - 'personas.json'
+      - 'scripts/**'
       - 'tests/**'
       - '.github/workflows/tts-quality.yml'
   workflow_dispatch:
@@ -43,7 +46,7 @@ jobs:
       # ignore: plain `ignore` would replace flake8's default ignore list and
       # silently re-enable cosmetic checks nobody intended to enforce.
       - name: Lint
-        run: flake8 speech.py tts_cache.py alt_tts_backends.py model_manager.py tests/
+        run: flake8 speech.py speech_utils/ tts_cache.py alt_tts_backends.py model_manager.py scripts/ tests/
 
   test:
     runs-on: ubuntu-latest
@@ -108,3 +111,34 @@ jobs:
       # neural backend. gi/sugar3 are stubbed, so no GStreamer needed.
       - name: Low-RAM gate wiring
         run: pytest tests/evaluation/test_ram_gate.py -q
+
+      # Text normalization, plus the tripwires recording which normalization
+      # steps espeak-ng already handles. Phonemises through espeak directly.
+      - name: Text normalization
+        run: pytest tests/evaluation/test_normalizer.py -q
+
+      # Mixed-script segmentation ("मेरा name है Rahul") and that speech.py
+      # routes through it. gi/sugar3 stubbed.
+      - name: Code-switching
+        run: pytest tests/evaluation/test_codeswitch.py -q
+
+      # That pressing Speak produces sound immediately during Kokoro's 44s
+      # cold start, rather than blocking on the model.
+      - name: Zero-silence startup
+        run: pytest tests/evaluation/test_zero_silence.py -q
+
+      # Every palette language has a persona, and every persona has the keys
+      # activity.py subscripts directly.
+      - name: Personas
+        run: pytest tests/evaluation/test_personas.py -q
+
+      # Phoneme Error Rate against the committed reference snapshot. espeak
+      # only; catches a G2P regression between native-speaker rounds.
+      - name: Phoneme error rate
+        run: pytest tests/evaluation/test_per.py -q
+
+      # Multi-file verified downloads, and that both backends actually consult
+      # ModelManager instead of fetching from the hub unchecked. Fixtures are
+      # served over localhost, so no network.
+      - name: Verified downloads
+        run: pytest tests/evaluation/test_verified_downloads.py -q
