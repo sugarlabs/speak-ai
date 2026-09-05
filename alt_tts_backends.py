@@ -184,7 +184,24 @@ class PiperBackend(FallbackTTSBackend):
 
 LANGUAGE_BACKEND_PREFERENCE = {
     'en-us': ['primary'], 'en-gb': ['primary'],
-    'es': ['primary', 'piper'], 'fr': ['primary', 'piper'],
+    # Spanish leads with Piper on review data, not on preference. 21 native
+    # speaker responses scored Kokoro's ef_dora at 2.2/5 for naturalness while
+    # giving it 4.8 for phonemes and 5.0 for intelligibility, so the
+    # pronunciation is right and the voice is what people object to: "robotic",
+    # "no emotion", "hoarse". rubric.md's rule for a language under 3/5 is to
+    # move it to the dedicated backend, and this is that move.
+    #
+    # The score does not correlate with sentence length (r=+0.13 against the
+    # phoneme-length index Kokoro uses to pick its voice vector), which rules
+    # out the chunking and points at the voice itself. Measured pitch dynamics
+    # line up: ef_dora sits at f0_std 43.2 / range 123.0, Hindi's hf_alpha at
+    # 48.8 / 147.2 scored 4.0, and es_ES-davefx reaches 52.4 / 153.9.
+    #
+    # Costs ~60 MB where Spanish used to be free inside Kokoro. If Piper is
+    # not installed this falls through to 'primary' and behaves exactly as
+    # before, so the trade is only paid where it can be honoured.
+    'es': ['piper', 'primary'],
+    'fr': ['primary', 'piper'],
     'hi': ['primary', 'piper'], 'it': ['primary'],
     'pt-br': ['primary', 'piper'], 'ja': ['primary'],
     'zh': ['primary', 'piper'],
