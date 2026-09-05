@@ -245,6 +245,8 @@ def main():
     ap.add_argument('--runs', type=int, default=20, help='synthesis/cache samples')
     ap.add_argument('--json', default=None, help='write raw results here')
     ap.add_argument('--skip-cold', action='store_true', help='skip subprocess cold start')
+    ap.add_argument('--markdown', action='store_true',
+                    help='also print a paste-ready tts_footprint_poc.md column')
     args = ap.parse_args()
 
     print("=" * 78)
@@ -307,8 +309,55 @@ def main():
         Path(args.json).write_text(json.dumps(results, indent=2))
         print(f"\nwrote {args.json}")
 
+    if args.markdown:
+        print_markdown_column(results, syn, cache, rtf, cpu_ratio, speedup)
+
     print("\n" + "=" * 78)
     return 0
+
+
+def print_markdown_column(results, syn, cache, rtf, cpu_ratio, speedup):
+    """Emit this run as a paste-ready column for tts_footprint_poc.md.
+
+    The ARM column in that table is TBD because nobody has run this on a Pi
+    yet, and estimating ARM from x86 would be inventing data. Printing the
+    column in the table's own format means filling it in is a copy-paste for
+    whoever does have the hardware, rather than a transcription job that
+    quietly never happens.
+    """
+    env = results['environment']
+    cold = results.get('cold_start', {})
+    machine = env.get('machine') or env.get('platform') or 'this machine'
+
+    def ms(value):
+        return f"**{value:.1f} ms**"
+
+    rows = [
+        ("Peak RSS during synthesis", f"**{syn['peak_rss_mb']:.1f} MB**"),
+        ("RSS after Kokoro load", f"**{syn['after_load_rss_mb']:.1f} MB**"),
+        ("Kokoro load RSS delta", f"**{syn['load_delta_mb']:.1f} MB**"),
+        ("Baseline RSS before load", f"**{syn['baseline_rss_mb']:.1f} MB**"),
+        ("Warm synthesis p50", ms(syn['wall']['p50'])),
+        ("Warm synthesis p95", ms(syn['wall']['p95'])),
+        ("Warm synthesis p99", ms(syn['wall']['p99'])),
+        ("Audio produced", f"{syn['audio_seconds']:.2f} s"),
+        ("Real-time factor (p50)", f"**{rtf:.3f}x**"),
+        ("CPU/wall ratio (p50)", f"**{cpu_ratio:.2f}**"),
+        ("Cache key generation (p50)", f"**{cache['key_gen']['p50']:.3f} ms**"),
+        ("Cache hit p50", f"**{cache['hit']['p50']:.3f} ms**"),
+        ("Cache hit p99", f"**{cache['hit']['p99']:.3f} ms**"),
+        ("Cache speedup on repeated phrase", f"**~{speedup:,.0f}x**"),
+    ]
+    if cold and 'error' not in cold:
+        rows.append(("Cold start (fresh process)", f"{cold['seconds']:.2f} s"))
+
+    print("\n" + "=" * 78)
+    print(f"Paste-ready column for tts_footprint_poc.md ({machine}):")
+    print("=" * 78 + "\n")
+    print(f"Environment: {' · '.join(f'{k} {v}' for k, v in env.items())}\n")
+    width = max(len(label) for label, _ in rows)
+    for label, value in rows:
+        print(f"| {label:<{width}} | {value} |")
 
 
 if __name__ == '__main__':

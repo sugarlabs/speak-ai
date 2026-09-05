@@ -108,10 +108,30 @@ be slower and is part of the ARM TODO.
 > governs the classroom — is still TBD and is exactly why the async background
 > load with an espeak placeholder is non-negotiable.
 
-## ARM / classroom hardware — TODO
+## ARM / classroom hardware — not measured
 
-Planned on a Raspberry Pi 4 (4 GB) per the proposal. To be measured with the
-same script, same sentence, same 20-run protocol:
+The ARM column is TBD because no ARM hardware has been available, and it stays
+TBD rather than being filled with an extrapolation. An ARM number derived from
+an x86 number is not a number, it is a guess wearing a number's clothes, and
+this whole document exists to avoid exactly that.
+
+### Runbook — filling the column
+
+On a Raspberry Pi 4 (or any aarch64 machine), from a checkout with the
+requirements installed:
+
+```bash
+python scripts/profile_tts.py --runs 20 --markdown --json arm.json
+```
+
+`--markdown` prints the results already formatted as the second column of the
+table above, so filling it in is a paste rather than a transcription. Keep the
+same 20-run protocol and the same sentence so the two columns stay comparable.
+
+Attach `arm.json` to the PR that updates this file — the raw samples let a
+reviewer check the percentiles rather than trust them.
+
+### What the ARM run should answer
 
 1. Kokoro cold-start time (SD-card storage, 4 cores)
 2. Peak RSS during synthesis
@@ -119,9 +139,25 @@ same script, same sentence, same 20-run protocol:
 4. Cache hit latency on SD card (`np.load` is slower there than on SSD)
 5. MMS + Kokoro co-residency: does `ModelManager` have to unload one to fit 1 GB?
 
-If physical hardware is unavailable during community bonding, QEMU ARM64
-emulation will be used as a stopgap and **clearly marked `[QEMU emulated]`**,
-with real-hardware numbers to follow.
+Question 5 is the one that changes code rather than documentation. If the two
+cannot co-reside, `ModelManager` needs an unload path before a backend switch;
+today it has none, because nothing has yet demonstrated it is needed.
+
+### On QEMU
+
+The proposal offered QEMU ARM64 emulation as a stopgap. It is a poor one for
+this particular measurement and was not used. QEMU emulates instructions, not
+the memory subsystem, cache hierarchy or storage of a Pi, so for compute-bound
+synthesis it produces a timing that reflects the host and the emulator rather
+than the target. Peak RSS would carry across; latency, which is the number
+that decides whether the async-load design is necessary, would not. A wrong
+latency labelled `[QEMU emulated]` is still a wrong latency people will quote.
+
+What the x86 numbers already establish without any ARM data: a 400 MB baseline
+RSS, a 723 MB load delta and a ~1.2 s warm synthesis on 16 fast cores. A 4-core
+Pi will be slower on all three, which is sufficient to justify both the RAM
+gate and the espeak-first startup path. Those two decisions do not need the ARM
+column; the co-residency question does.
 
 ## ONNX export findings
 

@@ -51,6 +51,31 @@ pytest tests/evaluation/test_language_aliases.py -q
 
 This test imports **no** torch, so it is the same check CI runs on every PR.
 
+### Only register a language espeak-ng can actually pronounce
+
+`LANG_CODES` maps to an espeak-ng language id, so this step only makes sense if
+espeak-ng *has* that language. Check before you edit anything:
+
+```bash
+espeak-ng --voices | grep -i yoruba
+```
+
+No row means no G2P, and an alias pointing at a language espeak cannot load is
+worse than no alias: it looks registered, routes, and then emits an empty
+phoneme string, which the child hears as silence.
+
+**This is why Kinyarwanda (`rw`) and Aymara (`ay`) are not in `ALIASES`.** The
+original plan was to register them here — they were the two languages this
+whole table was supposed to complete. They cannot be. `espeak-ng --voices` on
+the version this project ships lists `qu` (Quechua) and `gn` (Guarani) but has
+no entry for Kinyarwanda or Aymara at all. So Quechua and Guarani are
+registered and Kinyarwanda and Aymara are not; both instead route straight to
+MMS-TTS via `LANGUAGE_BACKEND_PREFERENCE`, which needs no phoneme stage. The
+single letters `w` and `y` that were reserved for them went to Swahili and
+stayed free respectively.
+
+A Tier 3 language reached only through MMS skips Step 1 entirely. Go to Step 3.
+
 ## Step 2 — Write a test corpus
 
 Create `tests/evaluation/corpora/<lang>.txt` with 18 sentences:
@@ -110,18 +135,69 @@ model later is a reviewed PR that changes `url`, `sha256`, and
 `upstream_version` together — there is no auto-update, because a surprise
 download mid-lesson on a school connection is not acceptable.
 
-## Step 5 — Text normalization (if the script needs it)
+Pin the **companion files** too, in `extra_files`. Neither loader takes a lone
+weights file: Piper needs the `.onnx.json` beside the `.onnx`, and transformers
+needs `config.json`, `vocab.json` and the tokenizer files beside
+`model.safetensors`. A swapped vocabulary changes what the model says just as
+surely as swapped weights would, so leaving them unpinned defeats the point.
+`test_verified_downloads.py` checks that every entry pins what its backend
+needs.
 
-If the language uses a script with special handling — numerals that must be
-spelled out, combining characters that need NFC normalization, ejective
-apostrophes — add it to the normalizer before it reaches G2P. Extended-Latin
-languages (Quechua, Guarani, Aymara) in particular need NFC normalization or
-the tokenizer splits ejectives incorrectly and the G2P output is garbage.
+## Step 5 — Add a persona
 
-## Step 6 — Verify end to end
+Every language in the palette needs one, or a child can select it and then have
+nobody who answers in it. In `personas.json`:
+
+```json
+"Ayo (Yorùbá)": {
+  "voice": "hf_alpha",
+  "lang": "yo",
+  "prompt": "..."
+}
+```
+
+`voice` is required — `activity.py` subscripts it directly — even for Piper and
+MMS languages that have no Kokoro embedding to switch to, where it is only a
+nominal value. `lang` pins the language so a reply too short to auto-detect
+("Sí.") is still spoken by the right voice. `test_personas.py` fails if a
+palette language has no persona.
+
+## Step 6 — Text normalization (measure before you write any)
+
+`speech_utils/normalizer.py` composes to NFC, folds apostrophe variants, and
+strips invisible joiners. That is deliberately all it does, and the reason is
+worth knowing before you add to it: **espeak-ng already handles more than you
+expect.** Measured on the version this project ships —
+
+- Hindi word-final schwa is already deleted correctly; appending an explicit
+  halant changes nothing on any of 10 test words.
+- Numerals are already read in the target language (`42` → बयालीस in Hindi,
+  `٣` and `3` identical in Arabic). Expanding them first with `num2words` makes
+  Arabic *worse* and is impossible for Hindi, which `num2words` lacks entirely.
+- Ejective apostrophes reach the Quechua and Guarani voices as the same
+  phonemes whether composed, decomposed, ASCII, U+2019 or U+02BC.
+
+What normalization genuinely fixes is one layer up: the Latin-script hint
+matching in `speech.py`. Decomposed Spanish `¿Cómo está usted?` matches no hint
+at all and gets read out in English.
+
+So before adding a step here, prove it is needed:
+
+```python
+from phonemizer.backend import EspeakBackend
+b = EspeakBackend('yo')
+print(b.phonemize([raw])[0], b.phonemize([normalized])[0])
+```
+
+If those two agree, espeak already handles it and the step is dead code. Record
+the finding as a test in `test_normalizer.py` — the ones there pass today
+because espeak is correct today, and fail loudly if that changes.
+
+## Step 7 — Verify end to end
 
 ```bash
 python tests/evaluation/verify_all.py    # corpora, aliases, G2P, WAVs
+python tests/evaluation/eval_per.py      # phoneme error rate vs the snapshot
 pytest tests/evaluation -q               # full suite
 flake8 .                                 # style (uses extend-ignore in .flake8)
 ```
@@ -129,14 +205,51 @@ flake8 .                                 # style (uses extend-ignore in .flake8)
 `verify_all.py` should report 0 failures and your language should appear in the
 G2P and WAV sections.
 
+A new espeak-driven language also needs a PER reference. Add it to
+`PER_LANGUAGES` in `eval_per.py`, then snapshot it:
+
+```bash
+python tests/evaluation/eval_per.py --lang yo --update-reference
+```
+
+Read the generated `reference/yo.ipa` before committing it. It becomes the
+baseline every future change is measured against, so a snapshot nobody looked
+at is a test that cannot fail.
+
+## Deploying offline
+
+Schools image machines once and then run them on a connection that cannot be
+relied on. Pre-download the models during imaging rather than letting a child
+trigger a 145 MB fetch mid-lesson:
+
+```bash
+python scripts/prefetch_models.py --list              # what is available
+python scripts/prefetch_models.py --languages ar,sw   # fetch just those
+python scripts/prefetch_models.py --all --model-dir /srv/speak-ai
+```
+
+The default path is checksum-verified against `MANIFEST.json`. If the manifest
+has not been pinned yet, the script says so and `--via-hub` downloads through
+HuggingFace instead — unverified, which it warns about every run.
+
+Per-language disk cost beyond the base install: Tier 1 languages are free
+(their voices ship inside Kokoro), Piper languages cost ~60 MB each after a
+~30 MB one-time engine, and MMS languages cost ~145 MB each after a ~98 MB
+one-time `transformers` layer. `--list` prints the real numbers for the
+manifest as it stands.
+
 ## Checklist
 
+- [ ] espeak-ng actually has a voice for the language (`espeak-ng --voices`)
 - [ ] `ALIASES` + `LANG_CODES` entries added, `test_language_aliases.py` green
+      (skip for a Tier 3 language that only reaches MMS)
 - [ ] 18-sentence corpus at `corpora/<lang>.txt`, native-speaker vetted
 - [ ] Cross-lingual + baseline WAVs generated and scored against the rubric
 - [ ] Backend chosen by score (≥ 3/5 gate), persona or preference updated
-- [ ] Model pinned in `MANIFEST.json` with a real hash (if downloaded)
-- [ ] Normalization added if the script needs it
+- [ ] Persona added to `personas.json`, `test_personas.py` green
+- [ ] Model + companion files pinned in `MANIFEST.json` with real hashes
+- [ ] Normalization added **only** if measurement showed espeak needs it
+- [ ] PER reference snapshotted and read before committing
 - [ ] `verify_all.py` clean, full suite green, flake8 clean
 - [ ] One small, reviewable PR — not a mega-commit
 
