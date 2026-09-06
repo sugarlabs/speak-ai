@@ -1,0 +1,23 @@
+# Aymara (Bolivian/Peruvian)
+# Format: category|sentence
+
+common|Kamisaraki? Waliki, jumasti?
+common|Kunas sutimax? Sutijara Carlos.
+common|Juspajarkätam, mirasuma.
+common|Cauquitaatasa? La Paz manta kani.
+common|Suma uru, imaynallan kashanki?
+common|Kawkhasa manuma? Ancha chanin.
+common|Yanapa! Nkeneye yanapawa.
+common|Suma jayp'u, jumasti?
+common|Mancaña muntati? Héẽ, anchata.
+common|Ccarurucama, sarawayä.
+
+difficult|Qullqitakañanakaxa phaxsi suytawa.
+difficult|Jakañäna jakawixa thuru qullqitakañawa.
+difficult|Jaqä kuttawiñäna lhawnakaxa warawara.
+difficult|Chhiwchhi wallpa wasinchikaxa phaxsi.
+difficult|Jaqäwawañäna qullqitakañanakaxa thuru.
+
+child|Phaxsi! Kuttawimawa nayä.
+child|Naya thuru qutawa muntäwi.
+child|Chhiwchhi wallpa kuttawimawa.
