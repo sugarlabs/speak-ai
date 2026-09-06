@@ -9,15 +9,19 @@ import torch
 import os
 
 ALIASES = {
-    'en-us': 'a',
-    'en-gb': 'b',
-    'es': 'e',
-    'fr-fr': 'f',
-    'hi': 'h',
-    'it': 'i',
-    'pt-br': 'p',
-    'ja': 'j',
-    'zh': 'z',
+    'en-us': 'a',   # American English
+    'en-gb': 'b',   # British English
+    'es': 'e',      # Spanish
+    'fr-fr': 'f',   # French
+    'hi': 'h',      # Hindi
+    'it': 'i',      # Italian
+    'pt-br': 'p',   # Portuguese (Brazil)
+    'ja': 'j',      # Japanese
+    'zh': 'z',      # Mandarin Chinese
+    'ar': 'r',      # Arabic
+    'sw': 'w',      # Swahili
+    'qu': 'q',      # Quechua
+    'gn': 'g',      # Guarani
 }
 
 LANG_CODES = dict(
@@ -26,11 +30,15 @@ LANG_CODES = dict(
     b='British English',
 
     # espeak-ng
-    e='es',
-    f='fr-fr',
-    h='hi',
-    i='it',
-    p='pt-br',
+    e='es',       # Spanish
+    f='fr-fr',    # French
+    h='hi',       # Hindi
+    i='it',       # Italian
+    p='pt-br',    # Portuguese (Brazil)
+    r='ar',       # Arabic
+    w='sw',       # Swahili
+    q='qu',       # Quechua
+    g='gn',       # Guarani
 
     # pip install misaki[ja]
     j='Japanese',
@@ -131,10 +139,15 @@ class KPipeline:
         elif lang_code == 'z':
             try:
                 from misaki import zh
-                self.g2p = zh.ZHG2P(
-                    version=None if repo_id.endswith('/Kokoro-82M') else '1.1',
-                    en_callable=en_callable
-                )
+                try:
+                    self.g2p = zh.ZHG2P(
+                        version=None if repo_id.endswith('/Kokoro-82M') else '1.1',
+                        en_callable=en_callable
+                    )
+                except TypeError:
+                    # Some misaki versions ship a ZHG2P with no constructor
+                    # args at all (older/newer API than this repo expects).
+                    self.g2p = zh.ZHG2P()
             except ImportError:
                 logger.error("You need to `pip install misaki[zh]` to use lang_code='z'")
                 raise
@@ -431,7 +444,10 @@ class KPipeline:
                     if not chunk.strip():
                         continue
                         
-                    ps, _ = self.g2p(chunk)
+                    g2p_result = self.g2p(chunk)
+                    # misaki's EspeakG2P returns a bare phoneme string, while
+                    # en/ja/zh G2Ps return a (phonemes, extra) tuple.
+                    ps = g2p_result[0] if isinstance(g2p_result, tuple) else g2p_result
                     if not ps:
                         continue
                     elif len(ps) > 510:

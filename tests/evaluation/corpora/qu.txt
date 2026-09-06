@@ -1,0 +1,23 @@
+# Quechua (Southern - Cusco-Collao)
+# Format: category|sentence
+
+common|Rimaykullayki, allillanchu?
+common|Sutiymi Pedro, maymanta kanki?
+common|Allillanmi, ¿qamrí?
+common|Añay, anchata sulpayki.
+common|Maymanta kanki? Qosqomanta kani.
+common|Imataq sutiyki? Sutiymi María.
+common|Allin p'unchay, imaynallan kashanki?
+common|Yaku munani, chaylla.
+common|Hayk'a kan kay? Ancha chanin.
+common|Pampachaykuway, ama hina kaychu.
+
+difficult|Tawantinsuyuqa hatun suyupi kachkarqan ñawpaq pachapichaw.
+difficult|Apuq pukllaytaq runataq rimanakuyta yachachin urqupi.
+difficult|Warmi chinkasqakutaq kusisqakutaq kaptin yachaywan.
+difficult|Intiwatanmi churachisqan watuqanpi qullqitakañataq.
+difficult|Qhapaq ñanqa hatun suyupi tukuytaq kan wasinchikpi.
+
+child|Ñuka mama! Kucha kachkan churan urqupi, rikchay.
+child|Ñuqapas pukllaytaq takitayta munani abuywan.
+child|Pillu urqupi chinkasqataq kaptin kuyanapaq.
