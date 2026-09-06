@@ -1,0 +1,23 @@
+# Spanish
+# Format: category|sentence
+
+common|Oye, ¿qué onda?
+common|Pásame el agua, porfa.
+common|No encontré las llaves en ningún lado.
+common|¿Ya comiste o todavía no?
+common|Mi mamá hace el mejor arroz con pollo.
+common|Ayer llovió todo el día y no salí.
+common|El perro del vecino no deja de ladrar.
+common|¿Me prestas tu lápiz? Se me olvidó el mío.
+common|Me cae gordo ese tipo, no sé por qué.
+common|Vamos a comer tacos esta noche.
+
+difficult|Ayer me encontré con la señora del sexto piso y me contó que su yerno se fue a Chile sin avisarle.
+difficult|El doctor me dijo que tengo que comer más verduras y que deje de tomar café tan fuerte.
+difficult|Mi hermano chico quiere jugar con los gatos del vecino pero ellos le tienen miedo.
+difficult|La lluvia no para y el río de atrás ya se desbordó, no se puede cruzar por ahí.
+difficult|Mi abuela dice que las chispas de la chimenea le recuerdan a su infancia en el pueblo.
+
+child|¡Mamá, mira! Hay un gato durmiendo bajo el árbol.
+child|Quiero ir al parque a jugar con mi prima.
+child|La rana saltó al agua y se escondió bajo una piedra.
