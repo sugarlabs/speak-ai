@@ -2,3 +2,20 @@ dist
 .0sugar
 *~
 *.pyc
+tests/evaluation/wav/
+tests/evaluation/*_report.json
+tests/evaluation/*_summary.txt
+API_KEY.txt
+
+# Generated ONNX artefacts — reproduce with scripts/export_onnx.py, never track
+# (the fp32 export is ~310 MiB). Downloaded models live outside the repo.
+kokoro.onnx
+kokoro_int8.onnx
+*.onnx
+models/
+.tts_cache/
+profile.json
+
+# Scratch WAVs written at the repo root when driving speech.py by hand.
+# Evaluation output belongs under tests/evaluation/wav/, ignored above.
+/demo_*.wav

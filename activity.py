@@ -22,8 +22,10 @@
 #     You should have received a copy of the GNU General Public License
 #     along with Speak.activity.  If not, see <http://www.gnu.org/licenses/>.
 
+import sys
 import logging
 import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dbus
 import subprocess
 import json
@@ -232,6 +234,8 @@ class SpeakActivity(activity.Activity):
         self._entry.modify_font(Pango.FontDescription('sans bold 24'))
         self._entry_box.show()
 
+        speech.get_speech().connect('word', self.__word_highlight_cb)
+
         self.face = face.View(fill_color=lighter)
         self._cartoon_face = self.face
         self.face.set_size_request(
@@ -317,6 +321,15 @@ class SpeakActivity(activity.Activity):
         self._make_kokoro()
         self._kokoro_button.connect('clicked', self._face_palette_cb)
         toolbox.toolbar.insert(self._kokoro_button, -1)
+
+        # Not 'module-language' — the Kokoro voice button above already uses
+        # it, and two adjacent toolbar buttons with the same icon are not
+        # distinguishable by the child who has to pick between them.
+        self._language_button = ToolButton('languages')
+        self._language_button.set_tooltip(_('Languages'))
+        self._make_languages()
+        self._language_button.connect('clicked', self._face_palette_cb)
+        toolbox.toolbar.insert(self._language_button, -1)
 
         self._face_button = ToolbarButton(
             page=self._make_face_bar(),
@@ -886,6 +899,97 @@ class SpeakActivity(activity.Activity):
         self._kokoro_palette.set_content(self._kokoro_voice_box)
         self._kokoro_voice_box.show_all()
 
+    def _make_languages(self):
+        """Palette listing supported languages grouped by engine tier.
+
+        Language is auto-detected from whatever the child types, so this
+        palette is mostly a "what can I type in" reference. Picking a
+        Neural (Kokoro) language also selects that language's default voice,
+        reusing the existing set_kokoro_voice path; the other tiers have no
+        Kokoro voice to set, so a tap there just highlights the selection.
+        """
+        self._language_evboxes = {}
+        self._language_box = Gtk.VBox()
+
+        languages = speech.get_speech().get_supported_languages()
+
+        # Preserve first-seen tier order without a separate ordered structure.
+        tiers = []
+        for tier, _code, _name, _endonym in languages:
+            if tier not in tiers:
+                tiers.append(tier)
+
+        for tier in tiers:
+            heading = Gtk.Label()
+            heading.set_markup('<b>%s</b>' % GLib.markup_escape_text(tier))
+            heading.set_justify(Gtk.Justification.CENTER)
+            heading.set_alignment(0.5, 0)
+            self._language_box.pack_start(
+                heading, False, False, style.DEFAULT_PADDING)
+            heading.show()
+
+            rows = [entry for entry in languages if entry[0] == tier]
+            hbox = Gtk.HBox()
+            columns = [Gtk.VBox(), Gtk.VBox(), Gtk.VBox()]
+            for i, (_tier, code, name, endonym) in enumerate(rows):
+                label = Gtk.Label()
+                label.set_use_markup(True)
+                label.set_justify(Gtk.Justification.LEFT)
+                # Endonym first, English name in parentheses so a child sees
+                # their language written the way they know it. Escaped because
+                # these come from a table CONTRIBUTING_LANGUAGES.md invites
+                # people to extend, and one '&' in a language name would
+                # otherwise take out the whole palette with a markup error.
+                #
+                # The leading U+200E pins the line to left-to-right. Without
+                # it the Arabic endonym makes the first strong character RTL,
+                # so Pango lays the whole row out right-to-left and "(Arabic)"
+                # jumps to the left of العربية while every other row reads the
+                # other way. The mark fixes the paragraph direction only; the
+                # Arabic word itself still shapes and renders RTL.
+                label.set_markup(
+                    '\u200e<span size="large">%s</span> '
+                    '<span size="small">(%s)</span>'
+                    % (GLib.markup_escape_text(endonym),
+                       GLib.markup_escape_text(name)))
+                alignment = Gtk.Alignment.new(0, 0, 0, 0)
+                alignment.add(label)
+                label.show()
+
+                evbox = Gtk.EventBox()
+                self._language_evboxes[code] = evbox
+                evbox.connect(
+                    'button-press-event', self._language_selected_cb, code)
+                evbox.add(alignment)
+                alignment.show()
+                columns[i % 3].pack_start(evbox, True, True, 0)
+                evbox.show()
+
+            for col in columns:
+                hbox.pack_start(col, True, True, style.DEFAULT_PADDING)
+            self._language_box.pack_start(
+                hbox, False, False, style.DEFAULT_PADDING)
+            hbox.show_all()
+
+        self._language_palette = self._language_button.get_palette()
+        self._language_palette.set_content(self._language_box)
+        self._language_box.show_all()
+
+    def _language_selected_cb(self, widget, event, code):
+        """Select a language; set its Kokoro voice when it has one."""
+        # Clear every highlight, then mark the tapped one.
+        for evbox in self._language_evboxes.values():
+            evbox.modify_bg(0, style.COLOR_BLACK.get_gdk_color())
+        self._language_evboxes[code].modify_bg(
+            0, style.COLOR_BUTTON_GREY.get_gdk_color())
+
+        # Only the Kokoro-native languages have a voice embedding to switch to.
+        # For Piper/MMS languages the backend is chosen by detected language at
+        # synthesis time, so there is nothing to set here.
+        voice_name = speech.get_speech().get_language_voice(code)
+        if voice_name in speech.get_speech().get_available_kokoro_voices():
+            speech.get_speech().set_kokoro_voice(voice_name)
+
     def _make_personas(self):
         self._persona_evboxes = {}
         self._persona_box = Gtk.VBox()
@@ -1019,6 +1123,13 @@ class SpeakActivity(activity.Activity):
 
         # Set current persona
         self._current_persona = persona_name
+
+        # A persona that is prompted to answer in one language pins it, so a
+        # reply too short to auto-detect ("Sí.", "Oui.") is still spoken by
+        # that language's voice rather than falling back to English. Personas
+        # without a 'lang' clear the pin and go back to pure auto-detection.
+        speech.get_speech().set_language_hint(
+            self._personas[persona_name].get('lang'))
 
         # Get the persona's voice and set it (using Kokoro voices)
         persona_voice_name = self._personas[persona_name]['voice']
@@ -1271,6 +1382,16 @@ class SpeakActivity(activity.Activity):
     def _dismiss_OSK(self, entry):
         entry.hide()
         entry.show()
+
+    def __word_highlight_cb(self, audio, start, end):
+        # (-1, -1) means "clear" — leave the whole utterance selected,
+        # matching the resting state _speak_the_text already sets.
+        if start < 0 or end < 0:
+            self._entry.select_region(0, -1)
+            return
+        text_len = len(self._entry.get_text())
+        if 0 <= start <= text_len and 0 <= end <= text_len:
+            self._entry.select_region(start, end)
 
     def _talk_cb(self, button):
         text = self._entry.props.text
