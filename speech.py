@@ -1046,14 +1046,99 @@ class Speech(GstSpeechPlayer):
 
         return None, None
 
+    def _phonemize_segment(self, text: str, lang: str) -> Optional[str]:
+        """IPA for one segment, using that language's own G2P.
+
+        Returns None for a language Kokoro cannot reach, which is the signal
+        to fall back to synthesizing segments separately.
+        """
+        pl_code, _voice = self._kokoro_lang_map.get(lang, (None, None))
+        if pl_code is None or not self._kokoro_usable():
+            return None
+        try:
+            pipeline = self._get_kokoro_pipeline(pl_code)
+            result = pipeline.g2p(text)
+            # misaki's EspeakG2P returns a bare string; the en/ja/zh G2Ps
+            # return (phonemes, extra).
+            phonemes = result[0] if isinstance(result, tuple) else result
+            return (phonemes or '').strip() or None
+        except Exception as e:
+            logger.debug("G2P failed for %r (%s): %s", text[:30], lang, e)
+            return None
+
+    def _speak_mixed_one_voice(self, text: str, segments) -> bool:
+        """Speak code-switched text as a single utterance in a single voice.
+
+        This is the path that should normally run. Synthesizing each run
+        separately is what the obvious implementation does and it sounds
+        wrong: "मेरा name है Rahul" becomes four one-word utterances in two
+        different voices, each with its own sentence-final intonation and a
+        gap after it. Nobody speaks like that, and a listener hears four
+        people rather than one sentence.
+
+        Kokoro is language-agnostic at the acoustic level: it turns IPA plus
+        a voice embedding into audio, and the embedding is what carries the
+        speaker. So each run is phonemised by its *own* language's G2P, which
+        is what gets the pronunciation right, and the phonemes are then
+        concatenated and spoken once by one voice. One speaker, one prosodic
+        contour, correct sounds for both languages.
+
+        Returns False if any run cannot be phonemised, which happens when a
+        language needs Piper or MMS. Those take text rather than phonemes, so
+        that case falls back to the segmented path below.
+        """
+        parts = []
+        for lang, segment_text in segments:
+            phonemes = self._phonemize_segment(segment_text, lang)
+            if phonemes is None:
+                return False
+            parts.append(phonemes)
+
+        joined = ' '.join(parts)
+        if len(joined) > 510:
+            # Past the model's token limit; the segmented path chunks instead.
+            return False
+
+        base_lang = segments[0][0]
+        pl_code, mapped_voice = self._kokoro_lang_map.get(
+            base_lang, ('a', self.current_kokoro_voice))
+        voice = (self.current_kokoro_voice if pl_code == 'a'
+                 else mapped_voice or self.current_kokoro_voice)
+
+        try:
+            pipeline = self._get_kokoro_pipeline(pl_code)
+            chunks = [audio.numpy() for _gs, _ps, audio in
+                      pipeline.generate_from_tokens(joined, voice=voice)]
+        except Exception as e:
+            logger.warning("Single-voice mixed synthesis failed: %s", e)
+            return False
+
+        if not chunks:
+            return False
+
+        waveform = numpy.concatenate(chunks).astype(numpy.float32)
+        self._current_sample_rate = _KOKORO_SR
+        self._current_backend_type = 'kokoro'
+        self._build_pipeline('audio_src', _KOKORO_SR)
+        self.restart_sound_device()
+        self._push_waveform_to_appsrc(waveform, _KOKORO_SR, text)
+        logger.debug("Spoke %d-run mixed utterance as one voice (%s, pl=%s)",
+                     len(segments), voice, pl_code)
+        return True
+
     def _speak_mixed(self, text: str, segments) -> bool:
         """Speak one utterance that changes language partway through.
 
-        Each run is synthesized by its own backend, resampled to a common
-        rate, and joined with a short silence so the two voices do not run
-        into each other. Returns False if any segment could not be produced,
-        leaving the caller to speak the whole string the ordinary way.
+        Tries the single-voice path first, which is what makes a
+        code-switched sentence sound like one person saying one sentence.
+        Only when a run needs a backend that cannot take phonemes does this
+        fall back to synthesizing the runs separately and stitching them,
+        which is audibly worse but still better than one G2P mangling the
+        other language.
         """
+        if self._speak_mixed_one_voice(text, segments):
+            return True
+        logger.debug("Falling back to per-segment mixed synthesis")
         pieces = []
         for lang, segment_text in segments:
             waveform, sr = self._synthesize_segment(segment_text, lang)

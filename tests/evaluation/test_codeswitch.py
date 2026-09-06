@@ -219,6 +219,103 @@ def make_speech():
     return s
 
 
+class TestSingleVoiceMixed(unittest.TestCase):
+    """The path that makes a code-switched sentence sound like one person.
+
+    Synthesizing each run separately is what the obvious implementation does,
+    and it turns "मेरा name है Rahul" into four one-word utterances in two
+    voices, each with its own sentence-final intonation and a gap after it.
+    Measured, that ran 5.60s against 2.35s for the same sentence spoken as one
+    utterance. These pin the single-voice path as the default and the
+    segmented one as the fallback.
+    """
+
+    def _speech(self):
+        s = make_speech()
+        s._kokoro_failed = False
+        s._kokoro_model = MagicMock()
+        s._kokoro_usable = MagicMock(return_value=True)
+        return s
+
+    def test_phonemes_are_joined_and_spoken_once(self):
+        s = self._speech()
+        s._phonemize_segment = MagicMock(side_effect=['mˌeːɾaː', 'nˈAm'])
+        pipe = MagicMock()
+        chunk = MagicMock()
+        chunk.numpy.return_value = numpy.ones(2400, dtype=numpy.float32)
+        pipe.generate_from_tokens.return_value = [('g', 'p', chunk)]
+        s._get_kokoro_pipeline = MagicMock(return_value=pipe)
+
+        self.assertTrue(s._speak_mixed_one_voice(
+            'मेरा name', [('hi', 'मेरा'), ('en-us', 'name')]))
+
+        # One synthesis call, not one per run.
+        pipe.generate_from_tokens.assert_called_once()
+        joined = pipe.generate_from_tokens.call_args[0][0]
+        self.assertEqual(joined, 'mˌeːɾaː nˈAm')
+
+    def test_uses_one_voice_for_every_run(self):
+        s = self._speech()
+        s._phonemize_segment = MagicMock(side_effect=['a', 'b', 'c'])
+        pipe = MagicMock()
+        chunk = MagicMock()
+        chunk.numpy.return_value = numpy.ones(2400, dtype=numpy.float32)
+        pipe.generate_from_tokens.return_value = [('g', 'p', chunk)]
+        s._get_kokoro_pipeline = MagicMock(return_value=pipe)
+
+        s._speak_mixed_one_voice(
+            'x y z', [('hi', 'x'), ('en-us', 'y'), ('hi', 'z')])
+        voice = pipe.generate_from_tokens.call_args[1]['voice']
+        self.assertEqual(voice, 'hf_alpha')
+
+    def test_no_boundary_silence_is_inserted(self):
+        """The gap between runs is what made it sound like separate words."""
+        s = self._speech()
+        s._phonemize_segment = MagicMock(side_effect=['a', 'b'])
+        pipe = MagicMock()
+        chunk = MagicMock()
+        chunk.numpy.return_value = numpy.ones(2400, dtype=numpy.float32)
+        pipe.generate_from_tokens.return_value = [('g', 'p', chunk)]
+        s._get_kokoro_pipeline = MagicMock(return_value=pipe)
+
+        s._speak_mixed_one_voice('a b', [('hi', 'a'), ('en-us', 'b')])
+        pushed = s._push_waveform_to_appsrc.call_args[0][0]
+        self.assertEqual(len(pushed), 2400)
+        self.assertTrue(numpy.all(pushed != 0))
+
+    def test_declines_when_a_run_cannot_be_phonemised(self):
+        """Piper and MMS take text, not phonemes, so those fall back."""
+        s = self._speech()
+        s._phonemize_segment = MagicMock(side_effect=['a', None])
+        self.assertFalse(s._speak_mixed_one_voice(
+            'a b', [('hi', 'a'), ('qu', 'b')]))
+        s._push_waveform_to_appsrc.assert_not_called()
+
+    def test_declines_past_the_model_token_limit(self):
+        s = self._speech()
+        s._phonemize_segment = MagicMock(side_effect=['x' * 300, 'y' * 300])
+        self.assertFalse(s._speak_mixed_one_voice(
+            'a b', [('hi', 'a'), ('en-us', 'b')]))
+
+    def test_speak_mixed_prefers_the_single_voice_path(self):
+        s = make_speech()
+        s._speak_mixed_one_voice = MagicMock(return_value=True)
+        s._synthesize_segment = MagicMock()
+        self.assertTrue(s._speak_mixed('a b', [('hi', 'a'), ('en-us', 'b')]))
+        s._speak_mixed_one_voice.assert_called_once()
+        s._synthesize_segment.assert_not_called()
+
+    def test_speak_mixed_falls_back_when_it_declines(self):
+        s = make_speech()
+        s._speak_mixed_one_voice = MagicMock(return_value=False)
+        s._synthesize_segment = MagicMock(side_effect=[
+            (numpy.ones(100, dtype=numpy.float32), 16000),
+            (numpy.ones(100, dtype=numpy.float32), 16000),
+        ])
+        self.assertTrue(s._speak_mixed('a b', [('hi', 'a'), ('qu', 'b')]))
+        self.assertEqual(s._synthesize_segment.call_count, 2)
+
+
 class TestSpeakMixed(unittest.TestCase):
 
     def test_joins_segments_with_silence_at_the_target_rate(self):
