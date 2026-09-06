@@ -112,25 +112,33 @@ class Voice:
 
 
 def allVoices():
+    global _allVoices
+
     if _allVoices:
         return _allVoices
 
     voice_list = speech.get_speech().get_all_voices()
 
+    voices = {}
     for language, name in voice_list.items():
         voice = Voice(language, name)
-        _allVoices[voice.friendlyname] = voice
+        voices[voice.friendlyname] = voice
 
     en_name = _friendly_name('English')
-    if en_name not in _allVoices:
-        _allVoices[en_name] = _allVoices[_friendly_name('English (America)')]
-        _allVoices[en_name].friendlyname = en_name
+    if en_name not in voices:
+        alias = voices.get(_friendly_name('English (America)'))
+        if alias is not None:
+            alias.friendlyname = en_name
+            voices[en_name] = alias
 
     es_name = _friendly_name('Spanish')
-    if es_name not in _allVoices:
-        _allVoices[es_name] = _allVoices[_friendly_name('Spanish (Latin America)')]
-        _allVoices[es_name].friendlyname = es_name
+    if es_name not in voices:
+        alias = voices.get(_friendly_name('Spanish (Latin America)'))
+        if alias is not None:
+            alias.friendlyname = es_name
+            voices[es_name] = alias
 
+    _allVoices = voices
     return _allVoices
 
 
