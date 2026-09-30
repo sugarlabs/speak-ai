@@ -1,0 +1,144 @@
+name: TTS quality gate
+
+# Guards the pieces of the pipeline that decide how a child's language gets
+# pronounced. Deliberately espeak-only: no torch, no model weights, no GPU.
+# Kokoro needs ~1.5 GB RSS and several seconds to load, which is more than a
+# standard runner should be asked to do on every push. Synthesis *quality* is
+# demonstrated by the contributor with generated WAVs and the scoring rubric;
+# what CI defends is that G2P and routing did not regress underneath it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'speech.py'
+      - 'speech_utils/**'
+      - 'kokoro/pipeline.py'
+      - 'alt_tts_backends.py'
+      - 'tts_cache.py'
+      - 'model_manager.py'
+      - 'MANIFEST.json'
+      - 'personas.json'
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/tts-quality.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install flake8
+        run: pip install flake8
+
+      # Reads .flake8 from the repo root. Note it uses extend-ignore, not
+      # ignore: plain `ignore` would replace flake8's default ignore list and
+      # silently re-enable cosmetic checks nobody intended to enforce.
+      - name: Lint
+        run: flake8 speech.py speech_utils/ tts_cache.py alt_tts_backends.py model_manager.py scripts/ tests/
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # The espeak-ng binary plus its data files. misaki's espeak backend
+      # shells out to this, so the apt package is a hard requirement even
+      # though espeakng_loader ships a copy of the data path.
+      - name: Install espeak-ng
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y espeak-ng
+
+      - name: Install Python dependencies
+        run: |
+          pip install pytest numpy psutil
+          pip install misaki phonemizer espeakng_loader num2words
+
+      # Language registration + espeak G2P reachability. Reads the alias tables
+      # with ast (no torch import) and phonemises through espeak directly.
+      # Finishes in under a second.
+      - name: Language aliases + G2P coverage
+        run: pytest tests/evaluation/test_language_aliases.py -q
+
+      # Cache correctness: LRU eviction, SHA-256 keying, atomic writes.
+      # Pure numpy, no synthesis.
+      - name: Audio cache
+        run: pytest tests/evaluation/test_tts_cache.py -q
+
+      # Backend routing: which engine a language resolves to, with the
+      # heavy backends mocked out.
+      - name: Backend routing
+        run: pytest tests/evaluation/test_alt_backends.py -q
+
+      # Offline-first model handling: checksum rejection, atomic rename,
+      # low-RAM guard. Serves fixtures over localhost, so no network.
+      - name: Model manager
+        run: pytest tests/evaluation/test_model_manager.py -q
+
+      # Static check that backend model IDs exist and match MANIFEST.json.
+      # No network, no torch. Guards the mms-tts-que bug from coming back.
+      - name: Backend model IDs
+        run: pytest tests/evaluation/test_backend_model_ids.py -q
+
+      # The language table behind the palette: no dup codes, valid tiers,
+      # expected coverage. Read via ast, so no torch.
+      - name: Supported languages table
+        run: pytest tests/evaluation/test_supported_languages.py -q
+
+      # Latin-script detection: every hint is reachable under the tokeniser,
+      # no hint collides with another language, and undetected text stays
+      # distinguishable from English. Read via ast, so no torch.
+      - name: Language detection
+        run: pytest tests/evaluation/test_language_detection.py -q
+
+      # That speech.py actually consults the low-RAM gate before building a
+      # neural backend. gi/sugar3 are stubbed, so no GStreamer needed.
+      - name: Low-RAM gate wiring
+        run: pytest tests/evaluation/test_ram_gate.py -q
+
+      # Text normalization, plus the tripwires recording which normalization
+      # steps espeak-ng already handles. Phonemises through espeak directly.
+      - name: Text normalization
+        run: pytest tests/evaluation/test_normalizer.py -q
+
+      # Mixed-script segmentation ("मेरा name है Rahul") and that speech.py
+      # routes through it. gi/sugar3 stubbed.
+      - name: Code-switching
+        run: pytest tests/evaluation/test_codeswitch.py -q
+
+      # That pressing Speak produces sound immediately during Kokoro's 44s
+      # cold start, rather than blocking on the model.
+      - name: Zero-silence startup
+        run: pytest tests/evaluation/test_zero_silence.py -q
+
+      # Every palette language has a persona, and every persona has the keys
+      # activity.py subscripts directly.
+      - name: Personas
+        run: pytest tests/evaluation/test_personas.py -q
+
+      # Phoneme Error Rate against the committed reference snapshot. espeak
+      # only; catches a G2P regression between native-speaker rounds.
+      - name: Phoneme error rate
+        run: pytest tests/evaluation/test_per.py -q
+
+      # Multi-file verified downloads, and that both backends actually consult
+      # ModelManager instead of fetching from the hub unchecked. Fixtures are
+      # served over localhost, so no network.
+      - name: Verified downloads
+        run: pytest tests/evaluation/test_verified_downloads.py -q
