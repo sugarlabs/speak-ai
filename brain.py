@@ -18,7 +18,7 @@
 #     You should have received a copy of the GNU General Public
 #     License along with HablarConSara.activity.  If not, see
 #     <http://www.gnu.org/licenses/>.
-
+import os
 import time
 from gettext import gettext as _
 
@@ -44,7 +44,7 @@ BOTS = {
                    'predicates': {'name': 'Alice',
                                   'master': 'The Sugar Community'}}}
 
-
+DEFAULT_LANG = os.getenv("SPEAK_LANG", "English")
 def get_mem_info(tag):
     meminfo = open('/proc/meminfo').readlines()
     return int([i for i in meminfo if i.startswith(tag)][0].split()[1])
@@ -105,10 +105,16 @@ def load(activity, voice, sorry=None):
         try:
             if voice.friendlyname in BOTS:
                 brain = BOTS[voice.friendlyname]
-                brain_name = BOTS[voice.friendlyname]['name']
+                brain_name = brain['name']
+
             else:
-                brain = BOTS[_('English')]
-                brain_name = BOTS[_('English')]['name']
+                # fallback to configurable default language
+                default_lang = _(DEFAULT_LANG)
+                if default_lang in BOTS:
+                    brain = BOTS[default_lang]
+                else:
+                    brain = BOTS[_('English')]
+                brain_name = brain['name']
             logger.debug('Load bot: %s' % brain)
 
             if voice != _kernel_voice or _kernel is None:
