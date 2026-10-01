@@ -1,0 +1,14 @@
+<?xml version="1.0" ?><!DOCTYPE svg  PUBLIC '-//W3C//DTD SVG 1.1//EN'  'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd' [
+	<!ENTITY stroke_color "#666666">
+	<!ENTITY fill_color "#ffffff">
+]><svg enable-background="new 0 0 55 55" height="55px" id="Layer_1" version="1.1" viewBox="0 0 55 55" width="55px" x="0px" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" y="0px"><g display="block" id="languages">
+	<!-- A meridian globe, drawn as geometry rather than glyphs so it does not
+	     depend on Devanagari or CJK fonts being installed to render. Kept
+	     visually distinct from module-language.svg (a world map in a frame),
+	     which the adjacent Kokoro voice button already uses. -->
+	<circle cx="27.5" cy="27.5" fill="none" r="19" stroke="&fill_color;" stroke-width="3.5"/>
+	<line fill="none" stroke="&fill_color;" stroke-width="3" x1="8.5" x2="46.5" y1="27.5" y2="27.5"/>
+	<line fill="none" stroke="&fill_color;" stroke-width="3" x1="27.5" x2="27.5" y1="8.5" y2="46.5"/>
+	<ellipse cx="27.5" cy="27.5" fill="none" rx="9.5" ry="19" stroke="&fill_color;" stroke-width="3"/>
+	<ellipse cx="27.5" cy="27.5" fill="none" rx="19" ry="9.5" stroke="&fill_color;" stroke-width="3"/>
+</g></svg>
