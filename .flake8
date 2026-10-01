@@ -9,4 +9,7 @@
 # W503 line break before binary operator
 # is okay provided there is consistency
 
-ignore = E402,E501,W503
+# Use extend-ignore, not ignore: plain `ignore` REPLACES flake8's built-in
+# default ignore list, which silently re-enables cosmetic checks like E226
+# (missing whitespace around arithmetic operator) that the defaults exclude.
+extend-ignore = E402,E501,W503

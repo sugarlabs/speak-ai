@@ -1,0 +1,83 @@
+{
+  "_comment": [
+    "Pinned model registry for Speak-AI. ModelManager will refuse to install",
+    "any entry whose sha256 is not a valid 64-char hex digest, so a new model",
+    "cannot ship without someone deliberately pinning it.",
+    "",
+    "To populate or update a hash, run:  python scripts/populate_manifest.py",
+    "That downloads each artefact, records its real digest, and rewrites this",
+    "file. Hashes are intentionally NOT hand-written — a hash nobody verified",
+    "is worse than no hash at all, because it looks trustworthy.",
+    "",
+    "Updating a model is a reviewed pull request that changes url + sha256 +",
+    "upstream_version together. There is deliberately no auto-update path: a",
+    "surprise 145 MB download during a lesson is not acceptable on a school",
+    "connection."
+  ],
+  "schema_version": 1,
+  "models": {
+    "piper_ar": {
+      "filename": "piper/ar_JO-kareem-medium.onnx",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/ar/ar_JO/kareem/medium/ar_JO-kareem-medium.onnx",
+      "sha256": "",
+      "size_mb": 60.27,
+      "upstream_version": "rhasspy/piper-voices@main",
+      "language": "ar",
+      "backend": "piper"
+    },
+    "piper_sw": {
+      "filename": "piper/sw_CD-lanfrica-medium.onnx",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/sw/sw_CD/lanfrica/medium/sw_CD-lanfrica-medium.onnx",
+      "sha256": "",
+      "size_mb": 60.27,
+      "upstream_version": "rhasspy/piper-voices@main",
+      "language": "sw",
+      "backend": "piper"
+    },
+    "piper_hi": {
+      "filename": "piper/hi_IN-priyamvada-medium.onnx",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx",
+      "sha256": "",
+      "size_mb": 60.57,
+      "upstream_version": "rhasspy/piper-voices@main",
+      "language": "hi",
+      "backend": "piper"
+    },
+    "mms_rw": {
+      "filename": "mms/mms-tts-kin.safetensors",
+      "url": "https://huggingface.co/facebook/mms-tts-kin/resolve/main/model.safetensors",
+      "sha256": "",
+      "size_mb": 145.0,
+      "upstream_version": "facebook/mms-tts-kin@main",
+      "language": "rw",
+      "backend": "mms"
+    },
+    "mms_qu": {
+      "filename": "mms/mms-tts-quz.safetensors",
+      "url": "https://huggingface.co/facebook/mms-tts-quz/resolve/main/model.safetensors",
+      "sha256": "",
+      "size_mb": 145.0,
+      "upstream_version": "facebook/mms-tts-quz@main",
+      "language": "qu",
+      "backend": "mms"
+    },
+    "mms_gn": {
+      "filename": "mms/mms-tts-grn.safetensors",
+      "url": "https://huggingface.co/facebook/mms-tts-grn/resolve/main/model.safetensors",
+      "sha256": "",
+      "size_mb": 145.0,
+      "upstream_version": "facebook/mms-tts-grn@main",
+      "language": "gn",
+      "backend": "mms"
+    },
+    "mms_ay": {
+      "filename": "mms/mms-tts-ayr.safetensors",
+      "url": "https://huggingface.co/facebook/mms-tts-ayr/resolve/main/model.safetensors",
+      "sha256": "",
+      "size_mb": 145.0,
+      "upstream_version": "facebook/mms-tts-ayr@main",
+      "language": "ay",
+      "backend": "mms"
+    }
+  }
+}
