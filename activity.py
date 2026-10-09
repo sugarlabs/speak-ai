@@ -204,6 +204,11 @@ class SpeakAIActivity(activity.Activity):
         # Load personas from `personas.json`
         self._personas = {}
         self._current_persona = None
+        self._slm_model = None
+        self._slm_model_lock = threading.Lock()
+        self._slm_infer_lock = threading.Lock()
+        self._slm_model_path = os.path.join(
+            '.', 'GenAI', 'LlaMA-135-Claude-RUN2-q4.gguf')
 
         with open('personas.json', 'r') as f:
             self._personas = json.load(f)
@@ -1372,6 +1377,23 @@ class SpeakAIActivity(activity.Activity):
             logging.error(f"Error in LLM: {e}")
             return None
 
+    def _get_slm_model(self):
+        """Load the GGUF model once and return the cached instance."""
+        if USING_BRAIN:
+            return None
+
+        if self._slm_model is not None:
+            return self._slm_model
+
+        with self._slm_model_lock:
+            if self._slm_model is None:
+                logger.info('Loading SLM model from %s', self._slm_model_path)
+                model = load_gguf_model(self._slm_model_path)
+                model.set_generation_mode(3)
+                self._slm_model = model
+
+        return self._slm_model
+
     def _try_slm_response(self, text):
         """Try to get response from SLM. Returns response string or None if failed."""
 
@@ -1379,11 +1401,19 @@ class SpeakAIActivity(activity.Activity):
             return "Hmm, that word isn't very friendly. Talking with kind words makes chatting more fun! Can you try again with a friendly word?"
 
         try:
-            model_path = "./GenAI/LlaMA-135-Claude-RUN2-q4.gguf"
-            model = load_gguf_model(model_path)
-            model.set_generation_mode(3)
+            model = self._get_slm_model()
+            if model is None:
+                return None
 
-            model_output = model.ask_question(text)
+            with self._slm_infer_lock:
+                model_output = model.ask_question(text)
+
+            if model_output is None:
+                return None
+
+            if not isinstance(model_output, str):
+                model_output = str(model_output)
+
             if is_profane(model_output):
                 model_output = "Sorry, I was not able to generate this response."
             return model_output
