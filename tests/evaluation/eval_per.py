@@ -165,11 +165,12 @@ def corpus_sentences(lang):
 def phonemize_corpus(lang):
     from misaki.espeak import EspeakG2P
     g2p = EspeakG2P(language=PER_LANGUAGES[lang])
-    # EspeakG2P returns a plain string, not the (phonemes, tokens) tuple the
-    # kokoro pipeline's g2p returns. Unpacking it silently iterates the string
-    # instead, which is what made verify_all.py report failures that were not
-    # real for all nine espeak languages.
-    return [g2p(text) for _cat, text in corpus_sentences(lang)]
+    # Misaki versions return either a string or (phonemes, tokens).
+    phonemes = []
+    for _cat, text in corpus_sentences(lang):
+        result = g2p(text)
+        phonemes.append(result[0] if isinstance(result, tuple) else result)
+    return phonemes
 
 
 def reference_path(lang):
