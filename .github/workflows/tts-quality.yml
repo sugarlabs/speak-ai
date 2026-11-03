@@ -108,3 +108,6 @@ jobs:
       # neural backend. gi/sugar3 are stubbed, so no GStreamer needed.
       - name: Low-RAM gate wiring
         run: pytest tests/evaluation/test_ram_gate.py -q
+
+      - name: Speech fallback
+        run: pytest tests/evaluation/test_speech.py -q

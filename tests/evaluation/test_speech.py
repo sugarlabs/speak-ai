@@ -18,9 +18,10 @@
 
 import os
 import sys
+import threading
 import types
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
@@ -42,9 +43,49 @@ sys.modules['sugar3'] = sugar3_mock
 sys.modules['sugar3.speech'] = sugar3_speech
 
 from speech import (
-    _detect_language, _LATIN_HINTS, _NS_PER_CHUNK, _DEFAULT_CHUNK_BYTES,
+    Speech, _detect_language, _LATIN_HINTS, _NS_PER_CHUNK, _DEFAULT_CHUNK_BYTES,
     _MIN_INTERVAL_MS, _MAX_FAILURES, _KOKORO_SR, _ESPEAK_SR
 )
+
+
+class TestKokoroInitializationFailure(unittest.TestCase):
+    def test_failure_signals_completion_and_keeps_espeak_fallback(self):
+        for method in ('_speak_impl', 'speak_multilingual'):
+            with self.subTest(method=method):
+                s = Speech.__new__(Speech)
+                s._language_hint = None
+                s._kokoro_lang_map = {'en-us': ('a', 'af_heart')}
+                s._tts_cache = None
+                s._kokoro_model = None
+                s._kokoro_failed = False
+                s._kokoro_ready = threading.Event()
+                s._get_backend_for_lang = MagicMock(return_value=None)
+                s._cache_voice_key = MagicMock(return_value='af_heart')
+                s._build_pipeline = MagicMock()
+                s.restart_sound_device = MagicMock()
+                s.pipeline = MagicMock()
+                status = MagicMock(pitch=100, rate=100)
+                status.voice.name = 'en-us'
+                args = (status, 'hello') if method == '_speak_impl' else ('hello',)
+
+                with patch('speech.KOKORO_AVAILABLE', True), \
+                        patch('speech.KPipeline', create=True,
+                              side_effect=RuntimeError('initialization failed')), \
+                        patch.object(s._kokoro_ready, 'wait') as wait:
+                    # Speech stays non-blocking during loading and after failure.
+                    for failed in (False, True):
+                        if failed:
+                            s._setup_kokoro()
+                            self.assertTrue(s._kokoro_failed)
+                            self.assertTrue(s._kokoro_ready.is_set())
+                        getattr(s, method)(*args)
+                        s._build_pipeline.assert_called_once_with('espeak', _ESPEAK_SR)
+                        s.restart_sound_device.assert_called_once_with()
+                        self.assertEqual(s.pipeline.get_by_name('espeak').props.text,
+                                         'hello')
+                        wait.assert_not_called()
+                        s._build_pipeline.reset_mock()
+                        s.restart_sound_device.reset_mock()
 
 
 class TestDetectLanguage(unittest.TestCase):
