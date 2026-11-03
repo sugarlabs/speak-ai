@@ -27,12 +27,13 @@ all — so the arithmetic is pinned down separately from the corpus run.
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from eval_per import (  # noqa: E402
     DEFAULT_THRESHOLD, PER_LANGUAGES, corpus_sentences, evaluate,
-    levenshtein, phoneme_error_rate, phoneme_tokens, reference_path,
+    levenshtein, phoneme_error_rate, phoneme_tokens, phonemize_corpus, reference_path,
 )
 
 
@@ -93,6 +94,18 @@ class TestPhonemeErrorRate(unittest.TestCase):
 
     def test_empty_both_is_no_error(self):
         self.assertEqual(phoneme_error_rate('', ''), 0.0)
+
+
+class TestPhonemizeCorpus(unittest.TestCase):
+
+    def test_accepts_string_and_tuple_g2p_results(self):
+        for output in ('kʰaː', ('kʰaː', None), ('kʰaː', ['metadata'])):
+            with self.subTest(output=output), \
+                    patch('eval_per.corpus_sentences',
+                          return_value=[('common', 'hello')]), \
+                    patch('misaki.espeak.EspeakG2P') as make_g2p:
+                make_g2p.return_value.return_value = output
+                self.assertEqual(phonemize_corpus('hi'), ['kʰaː'])
 
 
 class TestReferencesExist(unittest.TestCase):
