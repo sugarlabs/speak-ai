@@ -112,6 +112,9 @@ jobs:
       - name: Low-RAM gate wiring
         run: pytest tests/evaluation/test_ram_gate.py -q
 
+      - name: Speech fallback
+        run: pytest tests/evaluation/test_speech.py -q
+
       # Text normalization, plus the tripwires recording which normalization
       # steps espeak-ng already handles. Phonemises through espeak directly.
       - name: Text normalization

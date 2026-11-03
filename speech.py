@@ -452,6 +452,7 @@ class Speech(GstSpeechPlayer):
         except Exception as e:
             logger.error(f"Failed to initialize Kokoro: {e}")
             self._kokoro_failed = True
+            self._kokoro_ready.set()
 
     def _get_kokoro_pipeline(self, pl_code: str):
         """Return a KPipeline for the given lang_code, creating it lazily and
