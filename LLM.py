@@ -2,15 +2,50 @@ import requests
 import json
 import socket
 import logging
+import os
+
+from sugar3.activity.activity import get_activity_root
 
 #TODO: Dont hard code these, need to see how sugar as a whole manages API Keys
 API_URL = "https://ai.sugarlabs.org/ask-llm-prompted"
-try:
-    with open("API_KEY.txt", "r") as f:
-        API_KEY = f.read().strip()
-except OSError:
-    logging.error("Missing API_KEY.txt file.")
-    API_KEY = None
+
+# Load API key from Sugar activity root
+def get_api_key_path():
+    """Get the path to the API key file in Sugar activity root."""
+    data_dir = os.path.join(get_activity_root(), 'data')
+    os.makedirs(data_dir, exist_ok=True)
+    return os.path.join(data_dir, 'API_KEY.txt')
+
+def save_api_key(api_key):
+    """Save the API key to the activity data directory."""
+    api_key_path = get_api_key_path()
+    try:
+        with open(api_key_path, "w") as f:
+            f.write(api_key.strip())
+        return True
+    except Exception as e:
+        logging.error(f"Error saving API key: {e}")
+        return False
+
+def _get_api_key():
+    api_key_path = get_api_key_path()
+    try:
+        with open(api_key_path, "r") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        logging.error(f"API key file not found at {api_key_path}")
+        return None
+    except Exception as e:
+        logging.error(f"Error reading API key: {e}")
+        return None
+
+def reload_api_key():
+    """Reload the API key from disk. Call after saving a new key."""
+    global API_KEY
+    API_KEY = _get_api_key()
+    return API_KEY
+
+API_KEY = _get_api_key()
 
 DEFAULT_PROMPT = "You are a friendly teacher named Jane who is 28 years old. You teach 10 year old children. Always give helpful, educational responses in simple words that children can understand. Keep your answers between 20-40 words. Be encouraging and enthusiastic but never use emojis(ever). If you notice spelling mistakes, gently correct them. Stay focused on the topic and give relevant answers."
 
@@ -25,9 +60,8 @@ def is_connected():
 
 def ask_llm_prompted(question, custom_prompt = DEFAULT_PROMPT, timeout=120, max_length=200):
     if API_KEY is None:
-        logging.error("Missing API key file: API_KEY.txt")
+        logging.error("API key not configured. Add API_KEY.txt to the activity data directory.")
         return False
-    
     if not is_connected():
         return False
 

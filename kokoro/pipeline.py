@@ -8,6 +8,12 @@ import re
 import torch
 import os
 
+from sugar3.activity.activity import get_activity_root
+from .utils import get_sugar_cache_dir
+
+
+
+
 ALIASES = {
     'en-us': 'a',
     'en-gb': 'b',
@@ -149,7 +155,7 @@ class KPipeline:
         if voice.endswith('.pt'):
             f = voice
         else:
-            f = hf_hub_download(repo_id=self.repo_id, filename=f'voices/{voice}.pt')
+            f = hf_hub_download(repo_id=self.repo_id, filename=f'voices/{voice}.pt', cache_dir=get_sugar_cache_dir())
             if not voice.startswith(self.lang_code):
                 v = LANG_CODES.get(voice, voice)
                 p = LANG_CODES.get(self.lang_code, self.lang_code)
