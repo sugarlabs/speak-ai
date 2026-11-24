@@ -204,8 +204,7 @@ class SpeakAIActivity(activity.Activity):
         # Load personas from `personas.json`
         self._personas = {}
         self._current_persona = None
-        self._response_request_id = 0
-        self._response_request_lock = threading.Lock()
+        self._pending_bot_reply = None
 
         with open('personas.json', 'r') as f:
             self._personas = json.load(f)
@@ -1394,24 +1393,13 @@ class SpeakAIActivity(activity.Activity):
             logging.error(f"Error using SLM model: {e}")
             return None
 
-    def _next_response_request_id(self):
-        """Advance and return the current chatbot response request id."""
-        with self._response_request_lock:
-            self._response_request_id += 1
-            return self._response_request_id
-
-    def _is_latest_response_request(self, request_id):
-        """Check whether request_id is still the newest request."""
-        with self._response_request_lock:
-            return request_id == self._response_request_id
-
     def _speak_the_text(self, entry, text):
         self._remove_idle()
         if text:
             self.face.look_ahead()
+            self._pending_bot_reply = None
 
             if self._mode == MODE_BOT: # Chatbot mode
-                request_id = self._next_response_request_id()
 
                 # ORDER OF PRIORITY:
                 # 1. LLM (if internet is available)
@@ -1423,7 +1411,14 @@ class SpeakAIActivity(activity.Activity):
                     # But check if connected to internet first,
                     # otherwise go to SLM fallback
                     if is_connected():
-                        self.face.say("Thinking...")
+                        def still_thinking():
+                            if self._pending_bot_reply is still_thinking:
+                                self.face.say(_('Thinking...'))
+                            return False
+
+                        # Only GTK callbacks read or change the current reply.
+                        self._pending_bot_reply = still_thinking
+                        GLib.timeout_add_seconds(5, still_thinking)
                         
                         def fetch_and_speak_response():
                             response = self._try_llm_response(text)
@@ -1435,12 +1430,9 @@ class SpeakAIActivity(activity.Activity):
                                 response = brain.respond(text)
 
                             def safe_face_say():
-                                if not self._is_latest_response_request(request_id):
-                                    logger.debug(
-                                        'Skipping stale chatbot response for request %s',
-                                        request_id)
-                                    return False
-                                self.face.say(response)
+                                if self._pending_bot_reply is still_thinking:
+                                    self._pending_bot_reply = None
+                                    self.face.say(response)
                                 return False
                             GLib.idle_add(safe_face_say)
                         
@@ -1454,8 +1446,7 @@ class SpeakAIActivity(activity.Activity):
                         response = self._try_slm_response(text)
                         if not response:
                             response = brain.respond(text)
-                        if self._is_latest_response_request(request_id):
-                            self.face.say(response)
+                        self.face.say(response)
                 else:
                     # Use traditional brain chatbot
                     brain_response = brain.respond(text)
@@ -1513,6 +1504,7 @@ class SpeakAIActivity(activity.Activity):
     def _active_cb(self, widget, pspec):
         # only generate sound when this activity is active
         if not self.props.active:
+            self._pending_bot_reply = None
             self._load_sleeping_face()
             self.face.shut_up()
             self._chat.shut_up()
@@ -1530,6 +1522,7 @@ class SpeakAIActivity(activity.Activity):
         if not button.props.active:
             return
 
+        self._pending_bot_reply = None
         self._mode = MODE_TYPE
         self._chat.shut_up()
         self.face.shut_up()
@@ -1594,6 +1587,7 @@ class SpeakAIActivity(activity.Activity):
 
         self._remove_idle()
 
+        self._pending_bot_reply = None
         is_first_session = not self.shared_activity
 
         self._setup_chat_mode()
