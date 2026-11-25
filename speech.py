@@ -117,6 +117,7 @@ class Speech(GstSpeechPlayer):
         if self.pipeline is not None:
             self.stop_sound_device()
             del self.pipeline
+            self.pipeline = None  # avoids AttributeError if parse_launch fails
 
         # If kokoro is available build pipeline using kokoro, else use espeak
         # The pipeline has two sinks : `ears` & `fakesink`
@@ -140,9 +141,13 @@ class Speech(GstSpeechPlayer):
                 ' ! tee name=me' \
                 ' me.! queue ! autoaudiosink name=ears' \
                 ' me.! queue ! fakesink name=sink'
-            
-        self.pipeline = Gst.parse_launch(cmd)
-        
+        try:
+            self.pipeline = Gst.parse_launch(cmd)
+        except Exception as e:
+            #pipeline construction failed,TTS unavailable
+            logger.error(f"Failed to build GStreamer pipeline: {e}")
+            self.pipeline = None
+            return
         # Configure caps to ensure compatibility with numpy int16 processing
         if not (KOKORO_AVAILABLE and self.kokoro_pipeline):
             # force a sample bit width to match our numpy code below
