@@ -364,32 +364,39 @@ class Speech(GstSpeechPlayer):
             if appsrc:
                 appsrc.emit("end-of-stream")
 
-    def speak(self, status, text):
-        self.make_pipeline()
-        
-        if KOKORO_AVAILABLE and self.kokoro_pipeline:
-            logger.debug('Using Kokoro TTS: voice=%s text=%s' % (self.current_kokoro_voice, text))
-            self.restart_sound_device()
-            self._stream_kokoro_audio(text, self.current_kokoro_voice)
-            
-        else:
-            # Fallback to espeak
-            src = self.pipeline.get_by_name('espeak')
-            
-            pitch = int(status.pitch) - 100
-            rate = int(status.rate) - 100
+    def speak(self, status, text, lang='hi'):
+    from gtts import gTTS
+    import os
 
-            logger.debug('Using espeak fallback: pitch=%d rate=%d voice=%s text=%s' % (pitch, rate,
-                                                                status.voice.name,
-                                                                text))
+    try:
+        tts = gTTS(text=text, lang=lang)
+        tts.save("temp.mp3")
+        os.system("start temp.mp3")
+        return
+    except Exception as e:
+        print("Fallback to existing system", e)
 
-            src.props.pitch = pitch
-            src.props.rate = rate
-            src.props.voice = status.voice.name
-            src.props.track = 1
-            src.props.text = text
+    self.make_pipeline()
 
-            self.restart_sound_device()
+    if KOKORO_AVAILABLE and self.kokoro_pipeline:
+        logger.debug('Using Kokoro TTS')
+        self.restart_sound_device()
+        self._stream_kokoro_audio(text, self.current_kokoro_voice)
+
+    else:
+        # fallback to existing espeak
+        src = self.pipeline.get_by_name('espeak')
+
+        pitch = int(status.pitch) - 100
+        rate = int(status.rate) - 100
+
+        src.props.pitch = pitch
+        src.props.rate = rate
+        src.props.voice = status.voice.name
+        src.props.track = 1
+        src.props.text = text
+
+        self.restart_sound_device()
 
 
 _speech = None
