@@ -15,6 +15,7 @@
 #     along with Speak.activity.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
+import socket
 import warnings
 from typing import Dict, List
 from . import profainity_check
@@ -28,6 +29,20 @@ except ImportError:
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
+
+
+def is_connected(host="8.8.8.8", port=53, timeout=3):
+    """
+    Check if the device has an active internet connection.
+    Tries to connect to Google's DNS server.
+    Returns True if connected, False otherwise.
+    """
+    try:
+        socket.setdefaulttimeout(timeout)
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
+        return True
+    except (socket.error, OSError):
+        return False
 
 
 class GGUFInference:
@@ -68,7 +83,7 @@ class GGUFInference:
             "repeat_penalty": self.generation_settings["repetition_penalty"],
             "stop": ["Student:", "\nStudent:"]
         }
-    
+
     def _get_generation_settings(self, mode: int) -> Dict:
         """Get generation settings based on mode."""
         base_settings = {
@@ -93,13 +108,14 @@ class GGUFInference:
             raise ValueError(f"Invalid mode: {mode}. Must be 1, 2, or 3.")
 
         return base_settings
-    
+
     def set_generation_mode(self, mode: int):
         self.generation_settings = self._get_generation_settings(mode)
-    
+
     def _contains_profanity(self, text: str) -> bool:
         """
-        Check if the given text contains any profanity from the blacklist (whole word match only).
+        Check if the given text contains any profanity from the blacklist
+        (whole word match only).
         """
         words = [w.strip(".,!?;:()[]{}\"'").lower() for w in text.split()]
         blacklist = set(word.lower() for word in self.blacklisted_words)
@@ -107,13 +123,13 @@ class GGUFInference:
             if w in blacklist:
                 return True
         return False
-    
+
     def _format_conversation_history(self) -> str:
         """
         Format the conversation history for model input.
-        Output string of format: "Student: question\nTeacher: answer\nStudent: question2\nTeacher: answer2\n"
+        Output string of format:
+        "Student: question\nTeacher: answer\nStudent: question2\nTeacher: answer2\n"
         """
-        
         formatted_history = ""
 
         if not self.conversation_history:
@@ -124,24 +140,18 @@ class GGUFInference:
             formatted_history += f"Teacher: {entry['teacher']}\n"
 
         return formatted_history
-    
+
     def _truncate_history_if_needed(self, new_student_input: str) -> str:
         """
         Truncate conversation history if context would exceed max tokens.
-        Logic is:
-        -> First try to return everything - if below limit
-        -> else, remove the oldest conversation entry then check again
-           if limit hit...
-        -> until you reach a part where along with the current new question
-           we are below limit - once that is found - return that
         """
         history_str = self._format_conversation_history()
         potential_instruction = (f"{history_str}Student: {new_student_input}"
-                                f"\nTeacher:")
+                                 f"\nTeacher:")
 
         # this is an approximation
         token_count = len(potential_instruction.split()) * 1.3
-        
+
         # within limits, return as is
         if token_count <= self.max_context_tokens:
             return potential_instruction
@@ -152,37 +162,30 @@ class GGUFInference:
             temp_str = ""
             for entry in temp_history:
                 temp_str += (f"Student: {entry['student']}\n"
-                            f"Teacher: {entry['teacher']}\n")
-            # temp_str now looks like: Student: question\nTeacher: answer\n
-            # Student: question2\nTeacher: answer2\n ... till
-            # conversation_history[i:]
+                             f"Teacher: {entry['teacher']}\n")
 
             test_instruction = (f"{temp_str}Student: {new_student_input}"
-                               f"\nTeacher:")  # to check if after the new
-            # student question will we cross context limit
+                                f"\nTeacher:")
             test_token_count = len(test_instruction.split()) * 1.3
 
             if test_token_count <= self.max_context_tokens:
-                # Update conversation history to truncated version
                 self.conversation_history = temp_history
                 final_instruction = test_instruction
                 return final_instruction
-        
+
         # If even one exchange is too long, just use the current question
         final_instruction = f"Student: {new_student_input}\nTeacher:"
         self.conversation_history = []
         return final_instruction
-    
-    def _extract_teacher_response(self, generated_text: str, instruction: str) -> str:
+
+    def _extract_teacher_response(self, generated_text: str,
+                                  instruction: str) -> str:
         """Extract the teacher's response from generated text."""
-        # Remove the instruction part from the generated text
         if instruction in generated_text:
             response_part = generated_text[len(instruction):].strip()
         else:
             response_part = generated_text.strip()
-        
-        # Clean up the response
-        # Split by newlines and take the first meaningful line
+
         lines = response_part.split('\n')
         teacher_response = ""
 
@@ -192,37 +195,55 @@ class GGUFInference:
                 teacher_response = line
                 break
 
-        # Fallback if no good response found
         if not teacher_response:
             teacher_response = response_part.split('\n')[0].strip()
             if not teacher_response:
                 teacher_response = "I'm not sure how to respond to that."
 
         return teacher_response
-    
-    def ask_question(self, question: str, maintain_conversation: bool = True) -> str:
+
+    def ask_question(self, question: str,
+                     maintain_conversation: bool = True) -> str:
         """
         Ask the model a single question and get a response.
-        
+
         Args:
             question: The question to ask
-            maintain_conversation: Whether to add this Q&A to conversation history
-            
+            maintain_conversation: Whether to add this Q&A to conversation
+                                   history
+
         Returns:
             The model's response
         """
+        # Check for internet/server connectivity before making API call
+        if not is_connected():
+            offline_response = (
+                "I can't think right now because I'm not connected to the "
+                "internet. Please check your connection and try again later!"
+            )
+            if maintain_conversation:
+                self.conversation_history.append({
+                    "student": question,
+                    "teacher": offline_response
+                })
+            return offline_response
+
         # Check for profanity in student input
         if self._contains_profanity(question):
             blocked_response = "Looks like you have typed in a blacklisted word"
             if maintain_conversation:
-                self.conversation_history.append({"student": question, "teacher": blocked_response})
+                self.conversation_history.append({
+                    "student": question,
+                    "teacher": blocked_response
+                })
             return blocked_response
 
         if maintain_conversation:
-            instruction = self._truncate_history_if_needed(new_student_input=question)
+            instruction = self._truncate_history_if_needed(
+                new_student_input=question)
         else:
             instruction = f"Student: {question}\nTeacher:"
-        
+
         try:
             # Generate response
             response = self.model(instruction, **self.generation_params)
@@ -230,27 +251,71 @@ class GGUFInference:
 
             # Extract clean teacher response
             full_text = instruction + generated_text
-            teacher_response = self._extract_teacher_response(full_text, instruction)
+            teacher_response = self._extract_teacher_response(
+                full_text, instruction)
 
             # Check for profanity in model output
             if self._contains_profanity(teacher_response):
-                blocked_response = "Sorry, I cant answer this, can we talk about something else"
+                blocked_response = (
+                    "Sorry, I cant answer this, can we talk about something else"
+                )
                 if maintain_conversation:
-                    self.conversation_history.append({"student": question, "teacher": blocked_response})
+                    self.conversation_history.append({
+                        "student": question,
+                        "teacher": blocked_response
+                    })
                 return blocked_response
 
             # Add to conversation history if requested
             if maintain_conversation:
-                self.conversation_history.append({"student": question, "teacher": teacher_response})
+                self.conversation_history.append({
+                    "student": question,
+                    "teacher": teacher_response
+                })
 
             return teacher_response
 
+        except ConnectionError:
+            # Handle network connection errors gracefully
+            error_response = (
+                "I can't think right now because the AI server is unreachable."
+                " Please check your internet connection and try again later!"
+            )
+            print(f"ConnectionError: Sugar-AI server unreachable")
+            if maintain_conversation:
+                self.conversation_history.append({
+                    "student": question,
+                    "teacher": error_response
+                })
+            return error_response
+
+        except TimeoutError:
+            # Handle timeout errors gracefully
+            error_response = (
+                "I'm taking too long to respond. "
+                "Please try again in a moment!"
+            )
+            print(f"TimeoutError: Sugar-AI server timed out")
+            if maintain_conversation:
+                self.conversation_history.append({
+                    "student": question,
+                    "teacher": error_response
+                })
+            return error_response
+
         except Exception as e:
-            error_msg = f"Error generating response: {e}"
-            print(error_msg)
-            return "I'm not sure how to respond to that. There has been some kind of error."
+            # Handle any other unexpected errors gracefully
+            error_response = (
+                "I can't think right now, try again later!"
+            )
+            print(f"Error generating response: {e}")
+            if maintain_conversation:
+                self.conversation_history.append({
+                    "student": question,
+                    "teacher": error_response
+                })
+            return error_response
 
 
 def load_gguf_model(model_path: str, **kwargs) -> GGUFInference:
     return GGUFInference(model_path, **kwargs)
-
