@@ -79,7 +79,11 @@ def _get_age():
 def get_default_voice():
     default_voice = voice.defaultVoice()
     if default_voice.friendlyname not in BOTS:
-        return voice.allVoices()[_('English')]
+        # Prefer an English voice, since load() falls back to the English
+        # brain for any voice that has no bot of its own. If the system
+        # has no English voice at all, keep the one we have rather than
+        # failing; the English brain still loads.
+        return voice.allVoices().get(_('English'), default_voice)
     else:
         return default_voice
 
