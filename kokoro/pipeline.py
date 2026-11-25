@@ -24,6 +24,8 @@ ALIASES = {
     'pt-br': 'p',
     'ja': 'j',
     'zh': 'z',
+    'ar': 'r',
+    'sw': 's',
 }
 
 LANG_CODES = dict(
@@ -37,6 +39,8 @@ LANG_CODES = dict(
     h='hi',
     i='it',
     p='pt-br',
+    r='ar',
+    s='sw',
 
     # pip install misaki[ja]
     j='Japanese',
