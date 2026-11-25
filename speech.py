@@ -54,9 +54,11 @@ class Speech(GstSpeechPlayer):
         self.pipeline = None
         
         # Initialize Kokoro pipeline if available
-        self.kokoro_pipeline = None
+        self.kokoro_pipeline = None      # default 'a' pipeline (backward compat)
+        self.kokoro_pipelines = {}       # lang_code -> KPipeline
+        self.kokoro_model = None         # shared KModel across all pipelines
         if KOKORO_AVAILABLE:
-            threading.Thread(target=self.setup_kokoro).start()
+            threading.Thread(target=self.setup_kokoro, daemon=True).start()
         
         # Predefined Kokoro voices for future GUI selection - TODO
         self.kokoro_voices = [
@@ -77,7 +79,20 @@ class Speech(GstSpeechPlayer):
             self._cb[cb] = None
 
     def setup_kokoro(self):
-        self.kokoro_pipeline = KPipeline(lang_code='a')
+        repo_id = 'hexgrad/Kokoro-82M'
+        self.kokoro_pipeline = KPipeline(lang_code='a', repo_id=repo_id)
+        self.kokoro_model = self.kokoro_pipeline.model
+        self.kokoro_pipelines['a'] = self.kokoro_pipeline
+
+    def _init_pipeline_for_lang(self, lang_code):
+        """Lazily initialize a KPipeline for a new language, reusing the shared KModel."""
+        try:
+            repo_id = self.kokoro_pipeline.repo_id
+            pipeline = KPipeline(lang_code=lang_code, model=self.kokoro_model, repo_id=repo_id)
+            self.kokoro_pipelines[lang_code] = pipeline
+            logger.debug(f"Initialized Kokoro pipeline for lang_code='{lang_code}'")
+        except Exception as e:
+            logger.error(f"Failed to initialize Kokoro pipeline for lang_code='{lang_code}': {e}")
 
     def disconnect_all(self):
         for cb in ['peak', 'wave', 'idle']:
@@ -98,6 +113,12 @@ class Speech(GstSpeechPlayer):
     def set_kokoro_voice(self, voice_name):
         if voice_name in self.kokoro_voices:
             self.current_kokoro_voice = voice_name
+            lang_code = voice_name[0]
+            # Lazily initialize a pipeline for the new language if we don't have one yet
+            if lang_code not in self.kokoro_pipelines and self.kokoro_model is not None:
+                threading.Thread(
+                    target=self._init_pipeline_for_lang, args=(lang_code,), daemon=True
+                ).start()
             logger.debug(f"Kokoro voice set to: {voice_name}")
         else:
             logger.warning(f"Invalid Kokoro voice: {voice_name}.")
@@ -340,10 +361,27 @@ class Speech(GstSpeechPlayer):
             )
             appsrc.set_property("caps", caps)
 
-            audio_generator = self.kokoro_pipeline(text, voice=voice) # actual audio generation by kokoro
+            # Select the pipeline matching this voice's language; fall back to the
+            # default 'a' (American English) pipeline if the language-specific one
+            # hasn't been initialized yet.
+            lang_code = voice[0]
+            pipeline = self.kokoro_pipelines.get(lang_code) or self.kokoro_pipeline
+            if pipeline is None:
+                logger.error("Kokoro pipeline not ready yet")
+                return
+            if lang_code not in self.kokoro_pipelines:
+                logger.warning(
+                    f"Pipeline for lang_code='{lang_code}' not ready, "
+                    "falling back to American English pipeline"
+                )
+
+            audio_generator = pipeline(text, voice=voice) # actual audio generation by kokoro
 
             # Stream audio chunks
             for i, (gs, ps, audio_chunk) in enumerate(audio_generator):
+                if audio_chunk is None:
+                    logger.debug(f"Skipping chunk {i} with no audio")
+                    continue
                 # Convert tensor to numpy array then to bytes
                 data_bytes = audio_chunk.numpy().tobytes()
                 
