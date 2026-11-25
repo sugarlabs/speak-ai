@@ -1,0 +1,23 @@
+# Mandarin Chinese
+# Format: category|sentence
+
+common|嘿，最近怎么样？
+common|把水递给我，渴死了。
+common|我手机放哪儿了？
+common|今天在学校怎么样？
+common|妈妈做的红烧肉最好吃。
+common|昨天下了一整天的雨。
+common|隔壁王叔叔家的狗老是叫。
+common|你看见我书包里的课本了吗？
+common|我不喜欢那个人，说不上为什么。
+common|晚上一起去吃火锅吧。
+
+difficult|老师说下周要考试，让我们回去好好复习。
+difficult|我昨天在超市碰见你妈了，她买了好多菜。
+difficult|他跑到车站的时候车已经开了，只能等下一班。
+difficult|奶奶家那只猫特别懒，整天就知道睡觉。
+difficult|这条路上车太多了，我们绕一下走那边吧。
+
+child|妈妈快看！小猫咪在沙发上睡着了。
+child|我想要那个红色的小汽车，就在橱窗里放着的。
+child|蝴蝶在花园里飞来飞去，好漂亮啊。
