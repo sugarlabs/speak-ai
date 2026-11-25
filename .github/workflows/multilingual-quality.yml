@@ -1,0 +1,31 @@
+name: Multilingual Quality Checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  multilingual-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile multilingual tools
+        run: |
+          python -m py_compile multilingual.py
+          python -m py_compile speech.py
+          python -m py_compile tools/multilingual_eval.py
+          python -m py_compile tools/validate_multilingual_routing.py
+          python -m py_compile tools/pronunciation_scorecard.py
+
+      - name: Validate multilingual routing dataset
+        run: |
+          python tools/validate_multilingual_routing.py

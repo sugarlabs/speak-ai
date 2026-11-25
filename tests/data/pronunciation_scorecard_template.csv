@@ -1,0 +1,4 @@
+reviewer,language,text,voice,pronunciation,naturalness,notes
+native-speaker-1,Hindi,"नमस्ते, आज आपका दिन कैसा रहा?",hf_alpha,4.5,4.3,clear vowels
+native-speaker-2,Arabic,"مرحبا، كيف حالك اليوم؟",af_alloy,4.0,3.8,needs stronger emphatic consonants
+native-speaker-3,Chinese (Mandarin),"你好，我们今天学习普通话发音。",zf_xiaoxiao,4.7,4.6,very natural tone flow

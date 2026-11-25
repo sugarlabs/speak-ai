@@ -1,0 +1,64 @@
+{
+  "phrases": [
+    {
+      "language": "Spanish",
+      "text": "Hola, me llamo Ana y estoy aprendiendo idiomas.",
+      "expected_script": "latin",
+      "recommended_voice": "af_heart"
+    },
+    {
+      "language": "Portuguese (Brazilian)",
+      "text": "Ola, tudo bem com voce hoje?",
+      "expected_script": "latin",
+      "recommended_voice": "bf_emma"
+    },
+    {
+      "language": "Hindi",
+      "text": "नमस्ते, आज आपका दिन कैसा रहा?",
+      "expected_script": "devanagari",
+      "recommended_voice": "hf_alpha"
+    },
+    {
+      "language": "French",
+      "text": "Bonjour, je suis content de vous rencontrer.",
+      "expected_script": "latin",
+      "recommended_voice": "ff_siwis"
+    },
+    {
+      "language": "Arabic",
+      "text": "مرحبا، كيف حالك اليوم؟",
+      "expected_script": "arabic",
+      "recommended_voice": "af_alloy"
+    },
+    {
+      "language": "Swahili",
+      "text": "Habari yako rafiki yangu, asante sana.",
+      "expected_script": "latin",
+      "recommended_voice": "af_heart"
+    },
+    {
+      "language": "Quechua/Aymara",
+      "text": "Allillanchu masiy, sumaq punchaw kachun.",
+      "expected_script": "latin",
+      "recommended_voice": "af_heart"
+    },
+    {
+      "language": "Chinese (Mandarin)",
+      "text": "你好，我们今天学习普通话发音。",
+      "expected_script": "han",
+      "recommended_voice": "zf_xiaoxiao"
+    },
+    {
+      "language": "Kinyarwanda",
+      "text": "Muraho neza, amakuru yawe uyu munsi?",
+      "expected_script": "latin",
+      "recommended_voice": "af_heart"
+    },
+    {
+      "language": "Guarani",
+      "text": "Mbaeichapa nde reiko, che irungu'i.",
+      "expected_script": "latin",
+      "recommended_voice": "af_heart"
+    }
+  ]
+}
