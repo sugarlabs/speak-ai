@@ -17,7 +17,7 @@
 import os
 import warnings
 from typing import Dict, List
-from . import profainity_check
+from . import profanity_check
 
 try:
     from llama_cpp import Llama
@@ -51,7 +51,7 @@ class GGUFInference:
         self.max_context_tokens: int = max_context_tokens
         self.conversation_history: List[Dict[str, str]] = []
         self.generation_settings: dict = self._get_generation_settings(generation_mode)
-        self.blacklisted_words = profainity_check.bad_word_list()
+        self.blacklisted_words = profanity_check.bad_word_list()
 
         self.model = Llama(
             model_path=model_path,
