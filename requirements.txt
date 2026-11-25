@@ -1,8 +1,51 @@
-llama-cpp-python
-huggingface_hub
-misaki
-spacy
-numpy
+# The default torch wheel on PyPI is the CUDA build, which drags in ~3.4 GB of
+# nvidia and triton libraries. Sugar's target hardware has no GPU, so those are
+# dead weight on exactly the machines that can least afford it. The CPU wheel
+# is smaller and uses less memory at runtime:
+#
+#   venv      5.4 GB -> 1.7 GB
+#   peak RSS  1637 MB -> 1305 MB
+#   synthesis 1009 ms -> 1073 ms  (about 6% slower, worth it)
+#
+# The extra index is what makes pip pick torch-x.y.z+cpu over the plain build.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 torch
+numpy
 transformers
+huggingface_hub
+
+# Arabic and Swahili list Piper ahead of Kokoro in LANGUAGE_BACKEND_PREFERENCE,
+# so without this the language palette advertises "Neural (Piper)" for them
+# while get_tts_backend() quietly falls through to Kokoro cross-lingual. That
+# fallback is deliberate and safe, but it should not be what a default install
+# gets.
+piper-tts
+
+# G2P. misaki pulls espeak-ng through phonemizer, and num2words for expanding
+# numerals before they reach the phonemiser. espeakng_loader supplies the
+# espeak data path so it works without a system-wide ESPEAK_DATA_PATH.
+misaki
+phonemizer
+num2words
+espeakng_loader
+spacy
+
+# Mandarin G2P needs pypinyin and jieba, which come in through this extra.
+# Without it lang_code='z' raises ImportError at pipeline construction.
+misaki[zh]
+
+# kokoro/__init__.py imports loguru at module scope, so this is required to
+# import the package at all, not optional.
+loguru
+
+# Reading and writing evaluation WAVs.
+soundfile
+
+# ModelManager uses this to detect available RAM and refuse to load neural
+# backends on hardware that would OOM. It degrades to os.sysconf if missing,
+# but that path is a fallback, not the intended one.
+psutil
+
+llama-cpp-python
 requests

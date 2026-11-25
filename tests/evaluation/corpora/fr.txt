@@ -1,0 +1,23 @@
+# French
+# Format: category|sentence
+
+common|Salut, ça va?
+common|C'est quoi ce bruit?
+common|J'ai pas dormi de la nuit, j'étais crevé.
+common|Tu m'entends ou quoi?
+common|Ma mère fait les meilleures crêpes du monde.
+common|Il a plu toute la journée, j'ai rien pu faire.
+common|Le chat du voisin a encore griffé le canapé.
+common|T'as vu ce film hier soir?
+common|Je suis allé au marché et j'ai tout oublié.
+common|Faut qu'on se dépêche, on va être en retard.
+
+difficult|Le médecin m'a dit que je devrais prendre rendez-vous avec le spécialiste du centre hospitalier.
+difficult|Quand j'étais petit, on allait souvent à la plage en Bretagne, je m'en souviens encore.
+difficult|Ma collègue de travail vient de Strasbourg et elle parle aussi alsacien en plus du français.
+difficult|Il faisait un froid de canard et les gens marchaient vite pour rentrer chez eux.
+difficult|Les étudiants préparent leurs examens à la bibliothèque, c'est le calme total.
+
+child|Regarde! Le chat fait dodo sur le rebord de la fenêtre.
+child|J'ai trouvé un escargot dans le jardin, il bouge tout doucement.
+child|Ma poupée elle s'appelle Charlotte et elle a les cheveux tout rouges.
