@@ -60,7 +60,11 @@ class GGUFInference:
             verbose=verbose
         )
 
-        self.generation_params = {
+        self.generation_params = self._build_generation_params()
+
+    def _build_generation_params(self) -> Dict:
+        """Build llama.cpp generation parameters from current settings."""
+        return {    
             "max_tokens": self.generation_settings["max_tokens"],
             "temperature": self.generation_settings["temperature"],
             "top_p": self.generation_settings["top_p"],
@@ -96,7 +100,8 @@ class GGUFInference:
     
     def set_generation_mode(self, mode: int):
         self.generation_settings = self._get_generation_settings(mode)
-    
+        self.generation_params = self._build_generation_params()
+        
     def _contains_profanity(self, text: str) -> bool:
         """
         Check if the given text contains any profanity from the blacklist (whole word match only).
