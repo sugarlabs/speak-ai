@@ -15,4 +15,4 @@
 #     along with Speak.activity.  If not, see <http://www.gnu.org/licenses/>.
 
 from .gguf_inference import load_gguf_model
-from .profainity_check import *
+from .profanity_check import *
