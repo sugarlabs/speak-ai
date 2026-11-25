@@ -18,6 +18,7 @@
 
 import numpy
 import threading
+from collections import OrderedDict
 
 from gi.repository import Gst
 from gi.repository import GLib
@@ -72,6 +73,10 @@ class Speech(GstSpeechPlayer):
         ]
         self.current_kokoro_voice = 'af_heart'
 
+        # Initialize audio cache for generated phrases
+        self._audio_cache = OrderedDict()
+        self._cache_max_size = 50
+
         self._cb = {}
         for cb in ['peak', 'wave', 'idle']:
             self._cb[cb] = None
@@ -99,6 +104,15 @@ class Speech(GstSpeechPlayer):
         if voice_name in self.kokoro_voices:
             self.current_kokoro_voice = voice_name
             logger.debug(f"Kokoro voice set to: {voice_name}")
+            
+            # Switch language pipeline if necessary
+            if KOKORO_AVAILABLE and self.kokoro_pipeline:
+                new_lang_code = voice_name[0]
+                if new_lang_code in 'abjzefhip':
+                    if hasattr(self.kokoro_pipeline, 'lang_code') and self.kokoro_pipeline.lang_code != new_lang_code:
+                        logger.debug(f"Switching Kokoro pipeline language to {new_lang_code}")
+                        model = self.kokoro_pipeline.model
+                        self.kokoro_pipeline = KPipeline(lang_code=new_lang_code, model=model)
         else:
             logger.warning(f"Invalid Kokoro voice: {voice_name}.")
 
@@ -340,13 +354,26 @@ class Speech(GstSpeechPlayer):
             )
             appsrc.set_property("caps", caps)
 
-            audio_generator = self.kokoro_pipeline(text, voice=voice) # actual audio generation by kokoro
+            cache_key = (text, voice)
+            if cache_key in self._audio_cache:
+                logger.debug(f"Using cached audio for text: '{text[:30]}...' and voice: {voice}")
+                cached_chunks = self._audio_cache[cache_key]
+                self._audio_cache.move_to_end(cache_key)
+            else:
+                logger.debug(f"Generating new audio for text: '{text[:30]}...' and voice: {voice}")
+                audio_generator = self.kokoro_pipeline(text, voice=voice) # actual audio generation by kokoro
+                cached_chunks = []
+                for i, (gs, ps, audio_chunk) in enumerate(audio_generator):
+                    data_bytes = audio_chunk.numpy().tobytes()
+                    cached_chunks.append(data_bytes)
+                
+                # Store in cache
+                self._audio_cache[cache_key] = cached_chunks
+                if len(self._audio_cache) > self._cache_max_size:
+                    self._audio_cache.popitem(last=False)
 
             # Stream audio chunks
-            for i, (gs, ps, audio_chunk) in enumerate(audio_generator):
-                # Convert tensor to numpy array then to bytes
-                data_bytes = audio_chunk.numpy().tobytes()
-                
+            for i, data_bytes in enumerate(cached_chunks):
                 # Create GStreamer buffer
                 buf = Gst.Buffer.new_wrapped(data_bytes)
                 
