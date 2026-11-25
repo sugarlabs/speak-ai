@@ -41,6 +41,8 @@ PITCH_MAX = 200
 RATE_MIN = 0
 RATE_MAX = 200
 
+DEFAULT_KOKORO_VOICE = 'af_heart'
+
 
 class Speech(GstSpeechPlayer):
     __gsignals__ = {
@@ -70,7 +72,7 @@ class Speech(GstSpeechPlayer):
             'ff_siwis', 'hf_alpha', 'hf_beta', 'hm_omega', 'hm_psi',
             'if_sara', 'im_nicola', 'pf_dora', 'pm_alex', 'pm_santa'
         ]
-        self.current_kokoro_voice = 'af_heart'
+        self.current_kokoro_voice = DEFAULT_KOKORO_VOICE
 
         self._cb = {}
         for cb in ['peak', 'wave', 'idle']:
@@ -100,7 +102,11 @@ class Speech(GstSpeechPlayer):
             self.current_kokoro_voice = voice_name
             logger.debug(f"Kokoro voice set to: {voice_name}")
         else:
-            logger.warning(f"Invalid Kokoro voice: {voice_name}.")
+            logger.warning(
+                f"Invalid Kokoro voice: {voice_name}. "
+                f"Falling back to default voice: {DEFAULT_KOKORO_VOICE}"
+            )
+            self.current_kokoro_voice = DEFAULT_KOKORO_VOICE
 
     def get_available_kokoro_voices(self):
         return self.kokoro_voices.copy()
@@ -193,6 +199,12 @@ class Speech(GstSpeechPlayer):
             logger.debug(f"Processing audio chunk: size={size}, duration={actual_duration}, bpc={bpc}")
             
             while True:
+                # Initialize variables to safe defaults before the try block
+                # so that the except/finally paths never reference an unbound name.
+                raw_bytes = None
+                wave = None
+                peak = None
+
                 try:
                     # Extract raw bytes from the buffer
                     # `extract_dup` -> Extracts a copy of at most size bytes the data at offset into newly-allocated memory. (from docs)
@@ -212,16 +224,29 @@ class Speech(GstSpeechPlayer):
                     logger.debug(f"Processed wave chunk: length={len(wave)}, peak={peak}")
 
                 except (ValueError, TypeError) as e:
-                    logger.warning(f"Error processing audio data for lip sync: {e}")
+                    logger.warning(
+                        f"Error processing audio data for lip sync: {e} "
+                        f"(raw_bytes={'present' if raw_bytes is not None else 'None'}, "
+                        f"wave={'present' if wave is not None else 'None'}, "
+                        f"peak={'present' if peak is not None else 'None'})"
+                    )
                     break
 
                 except Exception as e:
-                    logger.error(f"Unexpected error in handoff function: {e}")
+                    logger.error(
+                        f"Unexpected error in handoff function: {e} "
+                        f"(raw_bytes={'present' if raw_bytes is not None else 'None'}, "
+                        f"wave={'present' if wave is not None else 'None'}, "
+                        f"peak={'present' if peak is not None else 'None'})"
+                    )
                     break
 
-                a.append(wave)
-                p.append(peak)
-                w.append(when)
+                # Guard: only append if both wave and peak were successfully computed.
+                # Prevents None values from leaking into the lists and crashing emit() later.
+                if wave is not None and peak is not None:
+                    a.append(wave)
+                    p.append(peak)
+                    w.append(when)
 
                 here += bpc
                 when += npc
