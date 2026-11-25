@@ -1,0 +1,23 @@
+# Guarani (Paraguayan)
+# Format: category|sentence
+
+common|Mba'éichapa reiko? Iporãite chéve.
+common|Mba'épa nde réra? Che réra Ramón.
+common|Aguyje, aguyjevete ndéve.
+common|Ndaikuaái recetávo. Eñe'ê chéve guaraníme.
+common|Moõpa oĩ hotel? Che jahéi tape.
+common|Mba'é reipópa? Héẽ, aipota peteĩ.
+common|Che ka'u, che yvytu. Tembi'u ha y.
+common|Ko'ẽmbotápe, mba'éichapa nde?
+common|Reñe'êkuaápa inglés? Añe'êkuaamichimi.
+common|Jajoecha peve, tereiko porãke.
+
+difficult|Ñanderu ru etee háicha ndéve ha oho mbyte tetãme.
+difficult|Tetã mbyryry gua'u ha yvypóra ojehecha porã.
+difficult|Kurusu rehe omoñanditeve ha gua'u ipype yvyra.
+difficult|Añe'ẽ ha che aho tembiapo mba'épa ojehecha.
+difficult|Yvyra tĩ porã tembiapópe ha gua'u hendy tetãme.
+
+child|Sila! Ojehecha poty mita ipype porãve.
+child|Che aikotevẽ poty mita hendy háicha.
+child|Gua'u oho ha che ayhu tetãme ndaje.
