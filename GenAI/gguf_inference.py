@@ -24,7 +24,7 @@ try:
     GGUF_AVAILABLE = True
 except ImportError:
     GGUF_AVAILABLE = False
-    raise ImportError("llama-cpp-python is required for GGUF models. Please install via pip")
+    # llama-cpp-python not installed — GGUF disabled, TTS still works
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
