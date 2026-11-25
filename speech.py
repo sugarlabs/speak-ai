@@ -28,6 +28,12 @@ logger = logging.getLogger('speak')
 
 from sugar3.speech import GstSpeechPlayer
 
+try:
+    from sugar3 import profile as sugar_profile
+    SUGAR_AVAILABLE = True
+except ImportError:
+    SUGAR_AVAILABLE = False
+
 # Kokoro TTS imports
 try:
     from kokoro import KPipeline
@@ -70,14 +76,50 @@ class Speech(GstSpeechPlayer):
             'ff_siwis', 'hf_alpha', 'hf_beta', 'hm_omega', 'hm_psi',
             'if_sara', 'im_nicola', 'pf_dora', 'pm_alex', 'pm_santa'
         ]
+        # Remove duplicate voice entries while preserving order
+        self.kokoro_voices = list(dict.fromkeys(self.kokoro_voices))
+
         self.current_kokoro_voice = 'af_heart'
+        self.kokoro_pipeline = KPipeline(
+           lang_code=self._get_sugar_lang_code()
+        )
 
         self._cb = {}
         for cb in ['peak', 'wave', 'idle']:
             self._cb[cb] = None
-
+            
+    def _get_sugar_lang_code(self):
+        """Read Sugar profile language and return
+        the corresponding Kokoro lang_code.
+        Falls back to 'a' (English) if unavailable."""
+        SUGAR_TO_KOKORO = {
+            'en': 'a', 'hi': 'h', 'ar': 'ar',
+            'zh': 'z', 'fr': 'f', 'pt': 'p',
+            'es': 'e', 'it': 'i',
+        }
+        try:
+            if SUGAR_AVAILABLE:
+                lang = sugar_profile.get_profile().get(
+                    'country', 'en_US'
+                )
+                lang_code = lang.split('_')[0].lower()
+                kokoro_code = SUGAR_TO_KOKORO.get(
+                    lang_code, 'a'
+                )
+                logger.debug(
+                    'Sugar locale: %s → Kokoro: %s',
+                    lang_code, kokoro_code
+                )
+                return kokoro_code
+        except Exception as e:
+            logger.warning(
+                'Could not read Sugar profile: %s', e
+            )
+        return 'a'
     def setup_kokoro(self):
-        self.kokoro_pipeline = KPipeline(lang_code='a')
+        self.kokoro_pipeline = KPipeline(
+           lang_code=self._get_sugar_lang_code()
+        )
 
     def disconnect_all(self):
         for cb in ['peak', 'wave', 'idle']:
