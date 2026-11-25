@@ -1,0 +1,100 @@
+{
+  "language": "English (American)",
+  "language_code": "a",
+  "description": "Pronunciation test cases for American English",
+  "notes": "American English uses IPA notation. Key phonological features tested: rhotic r, vowel reduction, stress patterns, consonant clusters.",
+  "test_categories": {
+    "rhotic_r": {
+      "description": "Rhotic r pronunciation in American English",
+      "notes": "American English has rhotic r in all positions, unlike British English"
+    },
+    "vowel_reduction": {
+      "description": "Reduction of vowels in unstressed syllables",
+      "notes": "Unstressed vowels often reduce to schwa [ə]"
+    },
+    "consonant_clusters": {
+      "description": "Complex consonant clusters",
+      "notes": "English allows various consonant combinations"
+    },
+    "stress_patterns": {
+      "description": "Word stress and syllable emphasis",
+      "notes": "Stress patterns are critical for pronunciation"
+    },
+    "th_sounds": {
+      "description": "Voiced and voiceless theta sounds",
+      "notes": "English has both /θ/ (voiceless) and /ð/ (voiced) as distinct phonemes"
+    }
+  },
+  "test_cases": [
+    {
+      "text": "hello",
+      "expected_phonemes": "/həˈloʊ/",
+      "description": "Simple word with stress and vowel reduction",
+      "tags": ["stress_patterns", "vowel_reduction"],
+      "notes": "First vowel reduces to schwa, final vowel is long diphthong"
+    },
+    {
+      "text": "water",
+      "expected_phonemes": "/ˈwɔtɚ/",
+      "description": "Rhotic r at word end",
+      "tags": ["rhotic_r"],
+      "notes": "American English preserves r sound; stress on first syllable"
+    },
+    {
+      "text": "cat",
+      "expected_phonemes": "/kæt/",
+      "description": "Simple CVC word",
+      "tags": [],
+      "notes": "Basic test for voiceless stops"
+    },
+    {
+      "text": "string",
+      "expected_phonemes": "/stɹɪŋ/",
+      "description": "Complex consonant cluster",
+      "tags": ["consonant_clusters"],
+      "notes": "Initial /str/ cluster; final /ŋ/ velar nasal"
+    },
+    {
+      "text": "the",
+      "expected_phonemes": "/ðə/",
+      "description": "Voiced theta with schwa",
+      "tags": ["th_sounds", "vowel_reduction"],
+      "notes": "The article 'the' has voiced theta and vowel reduction before vowels"
+    },
+    {
+      "text": "think",
+      "expected_phonemes": "/θɪŋk/",
+      "description": "Voiceless theta",
+      "tags": ["th_sounds"],
+      "notes": "Voiceless theta /θ/ at word beginning"
+    },
+    {
+      "text": "about",
+      "expected_phonemes": "/əˈbaʊt/",
+      "description": "Initial schwa with stress",
+      "tags": ["vowel_reduction", "stress_patterns"],
+      "notes": "First syllable unstressed; schwa reduction; final /aʊ/ diphthong"
+    },
+    {
+      "text": "elephant",
+      "expected_phonemes": "/ˈɛləfənt/",
+      "description": "Multiple vowel reductions",
+      "tags": ["vowel_reduction"],
+      "notes": "Multiple unstressed syllables with schwa reduction"
+    },
+    {
+      "text": "girl",
+      "expected_phonemes": "/ɡɚl/",
+      "description": "Rhotic r in syllabic position",
+      "tags": ["rhotic_r"],
+      "notes": "American r makes final syllable"
+    },
+    {
+      "text": "psychology",
+      "expected_phonemes": "/saɪˈkɑləʤi/",
+      "description": "Silent letter handling with stress",
+      "tags": ["stress_patterns"],
+      "notes": "Silent p at beginning; stress on second syllable; /dʒ/ affricate"
+    }
+  ]
+}

@@ -16,8 +16,9 @@
 
 import os
 import warnings
-from typing import Dict, List
+from typing import Dict, List, Optional
 from . import profainity_check
+from .cache import create_cache, ResponseCache
 
 try:
     from llama_cpp import Llama
@@ -33,7 +34,10 @@ warnings.filterwarnings("ignore")
 class GGUFInference:
     def __init__(self, model_path: str, max_context_tokens: int = 1500,
                  generation_mode: int = 1, n_threads: int = 1,
-                 verbose: bool = False):
+                 verbose: bool = False,
+                 response_cache: Optional[ResponseCache] = None,
+                 cache_max_items: int = 100,
+                 cache_file: Optional[str] = None):
         """ARGS:
         max_context_tokens: For the model used the actual max context window
                            is 2048, but reducing cause we use an approximation
@@ -52,6 +56,7 @@ class GGUFInference:
         self.conversation_history: List[Dict[str, str]] = []
         self.generation_settings: dict = self._get_generation_settings(generation_mode)
         self.blacklisted_words = profainity_check.bad_word_list()
+        self.response_cache = response_cache or create_cache(max_size=cache_max_items, cache_file=cache_file)
 
         self.model = Llama(
             model_path=model_path,
@@ -216,13 +221,21 @@ class GGUFInference:
             blocked_response = "Looks like you have typed in a blacklisted word"
             if maintain_conversation:
                 self.conversation_history.append({"student": question, "teacher": blocked_response})
+            self.response_cache.set(question, blocked_response)
             return blocked_response
 
         if maintain_conversation:
             instruction = self._truncate_history_if_needed(new_student_input=question)
         else:
             instruction = f"Student: {question}\nTeacher:"
-        
+
+        # Return cached response for repeated questions in the same session
+        cached_response = self.response_cache.get(question)
+        if cached_response is not None:
+            if maintain_conversation:
+                self.conversation_history.append({"student": question, "teacher": cached_response})
+            return cached_response
+
         try:
             # Generate response
             response = self.model(instruction, **self.generation_params)
@@ -237,12 +250,14 @@ class GGUFInference:
                 blocked_response = "Sorry, I cant answer this, can we talk about something else"
                 if maintain_conversation:
                     self.conversation_history.append({"student": question, "teacher": blocked_response})
+                self.response_cache.set(question, blocked_response)
                 return blocked_response
 
             # Add to conversation history if requested
             if maintain_conversation:
                 self.conversation_history.append({"student": question, "teacher": teacher_response})
 
+            self.response_cache.set(question, teacher_response)
             return teacher_response
 
         except Exception as e:
