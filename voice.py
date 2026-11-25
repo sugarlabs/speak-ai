@@ -190,7 +190,38 @@ def defaultVoice():
             if voice.friendlyname in [es_name, es_la_name]:
                 best = voice
                 break
-        if voiceMetric > bestMetric:
+
+        # Hindi
+        hi_name = _friendly_name('Hindi')
+        if lang[0:2] == 'hi' and hi_name in voices:
+            best = voices[hi_name]
+            break
+
+        # Chinese
+        zh_name = _friendly_name('Chinese')
+        if lang[0:2] == 'zh' and zh_name in voices:
+            best = voices[zh_name]
+            break
+
+        # Japanese
+        ja_name = _friendly_name('Japanese')
+        if lang[0:2] == 'ja' and ja_name in voices:
+            best = voices[ja_name]
+            break
+
+        # French
+        fr_name = _friendly_name('French')
+        if lang[0:2] == 'fr' and fr_name in voices:
+            best = voices[fr_name]
+            break
+
+        # Portuguese
+        pt_name = _friendly_name('Portuguese')
+        if lang[0:2] == 'pt' and pt_name in voices:
+            best = voices[pt_name]
+            break
+
+        if voiceMetric > bestMetric:   # <-- this line stays, nothing changes below it
             best = voice
 
     _defaultVoice = best
