@@ -1,0 +1,23 @@
+# Portuguese (Brazil)
+# Format: category|sentence
+
+common|E aí, beleza?
+common|Passa o copo aqui, por favor.
+common|Não achei minhas chaves em lugar nenhum.
+common|Você já comeu ou ainda não?
+common|Minha mãe faz o melhor arroz com feijão do mundo.
+common|Ontem choveu o dia inteiro e eu não saí de casa.
+common|O cachorro do vizinho não para de latir.
+common|Empresta seu lápis pra mim? Esqueci o meu.
+common|Não gosto nada daquele cara, não sei por quê.
+common|Vamos comer pizza hoje à noite.
+
+difficult|O médico falou que eu tenho que beber mais água e que pare de ficar no celular até tarde.
+difficult|Meu irmão mais novo ficou doente ontem e a minha mãe levou ele no hospital de manhã.
+difficult|O ônibus atrasou demais e eu cheguei atrasado no trabalho, foi um caos.
+difficult|Minha vizinha contou que a rua de trás tá toda quebrada por causa da obra que fizeram.
+difficult|A professora pediu pra gente trazer material de reciclagem pra fazer o projeto da escola.
+
+child|Olha, mãe! O gatinho tá dormindo debaixo da cadeira.
+child|Quero ir no parque jogar com meu primo.
+child|O sapo pulou na água e se escondeu debaixo de uma pedra.

@@ -1,0 +1,23 @@
+# Kinyarwanda
+# Format: category|sentence
+
+common|Muraho, amakuru yawe?
+common|Nitwa Jean, neje wowe.
+common|Murakoze cyane.
+common|Nshaka ikiringo cy'amazi, nyamuneka.
+common|Mwaramutse, ubuhehe?
+common|Isoko iri he? Nshaka guhura n'umuguzi.
+common|Nkeneye muganga, akarengane.
+common|Imbabazi, ndasaba inzira.
+common|Uvuga icyongereza? Sindabumva.
+common|Umunsi mwiza, turongera.
+
+difficult|Ndabonye abana batoya mu ishuri ryacu ndetse nari nabizi neza.
+difficult|Umugore we yakoze amakuru meza mu ishuri rye ry'ubutabera.
+difficult|Intare ziri mu mugezi zirikunywa amazi kandi zirareba ibibyo biriho.
+difficult|Abanyeshuri bahise basoma mu rusangi rw'umujyi wa Kigali.
+difficult|Umuyaga ukabaye ukavuga neza ubwami bw'inkoko ziri mu rugo.
+
+child|Reba! Hari umutuku mwiza mu kirere, wabonye?
+child|Nshaka gukina n'umupira mu kibuga n'abandi bana.
+child|Inkoko yacitse inyuma y'umurugo.

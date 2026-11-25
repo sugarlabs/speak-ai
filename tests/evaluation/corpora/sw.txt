@@ -1,0 +1,23 @@
+# Swahili
+# Format: category|sentence
+
+common|Habari, hali gani?
+common|Nipe maji tafadhali, nina kiu sana.
+common|Kitabu changu kiko wapi?
+common|Leo ulifanya nini shuleni?
+common|Mama yangu anapika chakula kitamu sana.
+common|Jana kulikuwa na mvua sana mchana.
+common|Mbwa wa jirani analia sana usiku.
+common|Umeona kalamu yangu? Nimeipoteza.
+common|Sipendi mtu yule, sijui kwa nini.
+common|Tunakwenda kula kuku usiku huu.
+
+difficult|Ndovu walitembea taratibu msituni na watoto waliwaangalia kwa mbali.
+difficult|Kijana yule alienda dukani kununua mkate na maziwa kwa ajili ya familia yake.
+difficult|Mvua ilikuwa imetoka jana na barabara bado ni mvua na tope kwingine kote.
+difficult|Shule yetu imepata kompyuta mpya na wanafunzi wanafurahi sana.
+difficult|Kahawa yetu ni bora zaidi kuliko ya jirani yangu, kila mtu anajua.
+
+child|Tazama! Kuna upinde wa mvua angani, ni mzuri sana.
+child|Ninataka kucheza na rafiki yangu uwanjani.
+child|Chura iliruka juu ya mawe na ikajificha chini ya jani.
